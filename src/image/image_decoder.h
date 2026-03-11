@@ -2,6 +2,10 @@
 
 #include <Arduino.h>
 
+#include <vector>
+
+#include "indexed_framebuffer.h"
+
 namespace zivyobraz::image {
 
 enum class ImageFormat : uint8_t {
@@ -12,24 +16,42 @@ enum class ImageFormat : uint8_t {
   Z3,
 };
 
-struct PixelSink {
-  virtual ~PixelSink() = default;
-  virtual void setPixel(uint16_t x, uint16_t y, uint16_t color565) = 0;
-  virtual uint16_t width() const = 0;
-  virtual uint16_t height() const = 0;
+enum class DecodeStatus : uint8_t {
+  Ok,
+  UnknownFormat,
+  RecognizedNotImplemented,
+  InvalidData,
+  TruncatedData,
+  Overflow,
+  UnsupportedColor,
+  FramebufferError,
 };
 
-class IImageDecoder {
+class IByteStream {
  public:
-  virtual ~IImageDecoder() = default;
-  virtual ImageFormat format() const = 0;
-  virtual bool decode(const uint8_t* data, size_t len, PixelSink& sink) = 0;
+  virtual ~IByteStream() = default;
+  virtual int readByte() = 0;
+};
+
+struct DecodeResult {
+  ImageFormat format{ImageFormat::Unknown};
+  DecodeStatus status{DecodeStatus::UnknownFormat};
+  bool success{false};
+  bool recognizedButNotImplemented{false};
+  size_t signatureOffset{0};
+  size_t pixelsDecoded{0};
+  size_t bytesConsumed{0};
+  String errorMessage;
 };
 
 class ImageDecoderFacade {
  public:
-  ImageFormat detectFormat(const uint8_t* data, size_t len) const;
-  bool decodeToSink(const uint8_t* data, size_t len, PixelSink& sink);
+  DecodeResult decode(IByteStream& source, IndexedFramebuffer& framebuffer, size_t probeLimit) const;
+
+ private:
+  DecodeResult decodeZ1(IByteStream& source, IndexedFramebuffer& framebuffer) const;
+  DecodeResult decodeZ2(IByteStream& source, IndexedFramebuffer& framebuffer) const;
+  DecodeResult decodeZ3(IByteStream& source, IndexedFramebuffer& framebuffer) const;
 };
 
 }  // namespace zivyobraz::image

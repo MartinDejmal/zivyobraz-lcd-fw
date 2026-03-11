@@ -286,31 +286,37 @@ Tento repozitář nyní obsahuje inicializační firmware scaffold v C++ pro Pla
 5. Přidat NVS perzistenci do `config_manager` a STA/AP fallback režimy ve `wifi_manager`.
 6. Rozšířit scheduler o řízený fetch-render-sleep cyklus včetně deep sleep strategie.
 
-## 11. Milestone update: protocol-compatible network core (current step)
+## 11. Milestone update: stream decode + indexed framebuffer render (current step)
 
-Nově je ve scaffoldu implementováno:
+Nově je implementováno:
 
-- Reálné STA Wi-Fi připojení (`wifi_manager`) včetně blokujícího connect timeoutu, lightweight reconnect, RSSI/IP/MAC diagnostiky a počítadla retry pokusů.
-- První NVS perzistence přes `Preferences` v `config_manager` pro SSID, heslo, host, HTTPS mód, API key a poslední timestamp.
-- Stabilní 8místný numerický `X-API-Key` (vygenerování při prvním bootu, následné načítání ze storage).
-- Reálný HTTP/HTTPS POST tok v `protocol_compat`:
-  - `POST /index.php?timestampCheck=1`
-  - `Content-Type: application/json`
-  - `Connection: close`
-  - `X-API-Key`
-  - parsování status line + hlaviček (`Timestamp`, `PreciseSleep`, `Rotate`, `PartialRefresh`, `ShowNoWifiError`, `X-OTA-Update`)
-- Timestamp decision logika pro `timestampCheck=1` (same vs changed) s konzervativním režimem:
-  - nový timestamp je zatím jen kandidát,
-  - finální commit timestampu je odložen na fázi po úspěšném decode/render.
-- Scheduler nyní reálně periodicky polluje server (30 s) při dostupné Wi-Fi a aktualizuje runtime diagnostiku.
-- ST7789 status screen zobrazuje smysluplné běhové informace o Wi-Fi i poslední protokolové odpovědi.
+- Streamové předání HTTP body z `protocol_compat` do dekódovací pipeline přes `HttpBodyStream` bez ukládání celého payloadu do velkého `String` bufferu.
+- Tolerantní signaturový probe (okno až 4096 B) pro `PNG`, `Z1`, `Z2`, `Z3` v `image_decoder` s reportem formátu i offsetu signatury.
+- Interní `IndexedFramebuffer` (`uint8_t` indexy, contiguous storage, bounds-checked access) nezávislý na ST7789 driveru.
+- Dekódování formátů `Z1`, `Z2`, `Z3` do interního framebufferu (row-major), včetně robustního hlášení chyb:
+  - truncated stream
+  - zero-length run
+  - unsupported color index
+  - pixel overflow
+- `PNG` je nyní korektně rozpoznáno a vrací stav „recognized but not implemented yet“.
+- Render cesta z indexového framebufferu do ST7789:
+  - deterministické mapování barev 0..6 -> RGB565
+  - aplikace `Rotate` až ve fázi renderu
+  - `PartialRefresh` je propisováno jako hint (TODO pro další optimalizace)
+- Timestamp commit policy v scheduleru:
+  - beze změny timestampu: bez decode/render/commit
+  - při chybě decode/render: bez commit
+  - commit do NVS pouze po úspěšném decode + render
+- Rozšířená diagnostická obrazovka: Wi-Fi, API key, host, protocol status, detected format, signature offset, decode result, decoded pixels, stored/candidate timestamp, render result.
 
 ### Aktuální omezení
 
-- HTTP body je zatím pouze spočítáno (počet bajtů), ale ještě se nepředává do decoderu.
-- Není implementován image decoding (PNG/Z1/Z2/Z3), OTA download/execution, deep sleep ani AP provisioning.
-- Persistovaný `lastTimestamp` se zatím vědomě necommituje po detekci změny, aby se nezablokoval navazující image-fetch krok.
+- PNG dekodér není implementován (jen detekce + explicitní stav).
+- OTA download/execution, deep sleep politika, AP provisioning a web UI nejsou v tomto kroku implementovány.
+- Render běží jako full redraw (bez dirty-region optimalizace).
 
-### Doporučený další krok
+### Přesně doporučený další krok
 
-Implementovat přímé streamové předání HTTP body do `image_decoder` vrstvy + formátovou detekci, následně po úspěšném decode/render provést finální commit nového timestampu do `config_manager`.
+1. Přidat PNG dekodér do stejného `ImageDecoderFacade` kontraktu.
+2. Po stabilizaci PNG doplnit sleep policy (`PreciseSleep` + deep sleep) a navázat partial refresh optimalizace v render backendu.
+3. Následně řešit OTA execution flow s bezpečným rollbackem.

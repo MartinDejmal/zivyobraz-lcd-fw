@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include "image/image_decoder.h"
+
 namespace zivyobraz::protocol {
 
 struct RequestMetadata {
@@ -34,6 +36,7 @@ enum class TransportStatus : uint8_t {
   NetworkError,
   HttpError,
   ParseError,
+  ProtocolError,
 };
 
 struct ProtocolResponse {
@@ -44,10 +47,14 @@ struct ProtocolResponse {
   bool bodyPresent{false};
   size_t bodySize{0};
   bool hasNewContent{false};
+  bool bodyHandled{false};
+  bool renderSuccess{false};
   String previousTimestamp;
   String candidateTimestamp;
   bool hasOtaUpdate{false};
   ResponseHeaders headers{};
+  image::DecodeResult decode{};
+  String renderMessage;
   String errorMessage;
 };
 
