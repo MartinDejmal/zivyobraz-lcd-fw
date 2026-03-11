@@ -341,3 +341,19 @@ V tomto kroku byla doplněna cílená diagnostika protokolu (bez uvolnění prod
 ### Pravděpodobný další krok
 
 Porovnat skutečný wire dump (raw status/headers/body preview) s očekávaným serverovým kontraktem a potvrdit, zda problém vzniká na straně serverové odpovědi nebo ve formátu hlaviček/flow režimu `timestampCheck`.
+
+## 13. Milestone update: request schema hardening + API key preflight
+
+V tomto kroku byl zpřísněn request kontrakt směrem k serverovému protokolu:
+
+- Payload `board` je nyní posílán jako skalární string (ne jako objekt).
+- `network.ip` byl nahrazen `network.ipAddress` a payload obsahuje i `network.apRetries`.
+- `display` metadata jsou rozšířena na `type`, `width`, `height`, `colorType` (pro ST7789 nyní `"7C"`).
+- `system` již neposílá nekompatibilní `name`; posílají se jen protokolově kompatibilní pole (aktuálně `resetReason`, pokud je k dispozici).
+- API key lifecycle byl zpřesněn:
+  - validace přesně 8 číslic,
+  - při chybě/missing stavu regenerace + persistence,
+  - jasné logování, zda byl key načten nebo regenerován.
+- Přidána preflight validace requestu před odesláním (`apiKey`, `board`, `network.ipAddress`, `display.width/height/colorType`).
+  - Při validační chybě se request neodešle.
+- Wire debug log nově obsahuje kompaktní schema summary (`boardKind`, `systemFields`, `networkFields`, `displayFields`, `apiKeyValid`).
