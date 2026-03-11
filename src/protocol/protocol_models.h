@@ -13,6 +13,10 @@ struct RequestMetadata {
   String network;
   String display;
   String sensors;
+  String wifiSsid;
+  String localIp;
+  String mac;
+  int32_t rssi{0};
 };
 
 struct ResponseHeaders {
@@ -34,8 +38,17 @@ enum class TransportStatus : uint8_t {
 
 struct ProtocolResponse {
   TransportStatus status{TransportStatus::NotAttempted};
-  ResponseHeaders headers{};
+  int httpStatusCode{0};
+  bool transportOk{false};
+  bool httpOk{false};
+  bool bodyPresent{false};
   size_t bodySize{0};
+  bool hasNewContent{false};
+  String previousTimestamp;
+  String candidateTimestamp;
+  bool hasOtaUpdate{false};
+  ResponseHeaders headers{};
+  String errorMessage;
 };
 
 }  // namespace zivyobraz::protocol

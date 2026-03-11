@@ -285,3 +285,32 @@ Tento repozitář nyní obsahuje inicializační firmware scaffold v C++ pro Pla
 4. Implementovat reálné dekodéry PNG/Z1/Z2/Z3 do `PixelSink`.
 5. Přidat NVS perzistenci do `config_manager` a STA/AP fallback režimy ve `wifi_manager`.
 6. Rozšířit scheduler o řízený fetch-render-sleep cyklus včetně deep sleep strategie.
+
+## 11. Milestone update: protocol-compatible network core (current step)
+
+Nově je ve scaffoldu implementováno:
+
+- Reálné STA Wi-Fi připojení (`wifi_manager`) včetně blokujícího connect timeoutu, lightweight reconnect, RSSI/IP/MAC diagnostiky a počítadla retry pokusů.
+- První NVS perzistence přes `Preferences` v `config_manager` pro SSID, heslo, host, HTTPS mód, API key a poslední timestamp.
+- Stabilní 8místný numerický `X-API-Key` (vygenerování při prvním bootu, následné načítání ze storage).
+- Reálný HTTP/HTTPS POST tok v `protocol_compat`:
+  - `POST /index.php?timestampCheck=1`
+  - `Content-Type: application/json`
+  - `Connection: close`
+  - `X-API-Key`
+  - parsování status line + hlaviček (`Timestamp`, `PreciseSleep`, `Rotate`, `PartialRefresh`, `ShowNoWifiError`, `X-OTA-Update`)
+- Timestamp decision logika pro `timestampCheck=1` (same vs changed) s konzervativním režimem:
+  - nový timestamp je zatím jen kandidát,
+  - finální commit timestampu je odložen na fázi po úspěšném decode/render.
+- Scheduler nyní reálně periodicky polluje server (30 s) při dostupné Wi-Fi a aktualizuje runtime diagnostiku.
+- ST7789 status screen zobrazuje smysluplné běhové informace o Wi-Fi i poslední protokolové odpovědi.
+
+### Aktuální omezení
+
+- HTTP body je zatím pouze spočítáno (počet bajtů), ale ještě se nepředává do decoderu.
+- Není implementován image decoding (PNG/Z1/Z2/Z3), OTA download/execution, deep sleep ani AP provisioning.
+- Persistovaný `lastTimestamp` se zatím vědomě necommituje po detekci změny, aby se nezablokoval navazující image-fetch krok.
+
+### Doporučený další krok
+
+Implementovat přímé streamové předání HTTP body do `image_decoder` vrstvy + formátovou detekci, následně po úspěšném decode/render provést finální commit nového timestampu do `config_manager`.
