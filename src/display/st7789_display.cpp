@@ -1,5 +1,6 @@
 #include "st7789_display.h"
 
+#include <memory>
 #include <SPI.h>
 
 #include "diagnostics/log.h"
@@ -10,7 +11,7 @@ bool St7789Display::begin(const DisplayConfig& cfg) {
   cfg_ = cfg;
   tft_ = std::make_unique<Adafruit_ST7789>(cfg_.pins.cs, cfg_.pins.dc, cfg_.pins.rst);
   SPI.begin(cfg_.pins.sclk, -1, cfg_.pins.mosi, cfg_.pins.cs);
-  tft_->init(cfg_.width, cfg_.height);
+  tft_->init(cfg_.width, cfg_.height, SPI_MODE3);
   tft_->setRotation(cfg_.rotation);
 
   if (cfg_.pins.bl >= 0) {

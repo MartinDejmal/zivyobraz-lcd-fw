@@ -34,7 +34,7 @@ void ConfigManager::loadDefaults() {
   cfg_.display.pins = {
       .mosi = 23,
       .sclk = 18,
-      .cs = 5,
+      .cs = -1,
       .dc = 16,
       .rst = 17,
       .bl = 4,
