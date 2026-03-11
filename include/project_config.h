@@ -60,6 +60,8 @@ struct RuntimeConfig {
   WifiConfig wifi;
   ServerConfig server;
   ProtocolVersionConfig versions;
+  String apiKey;
+  String lastTimestamp;
 };
 
 }  // namespace zivyobraz

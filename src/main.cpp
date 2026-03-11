@@ -16,6 +16,7 @@ zivyobraz::display::St7789Display gDisplay;
 zivyobraz::net::WifiManager gWifi;
 zivyobraz::protocol::ProtocolCompatService gProtocol;
 zivyobraz::runtime::Scheduler gScheduler;
+uint32_t gLastDisplayUpdateMs = 0;
 
 }  // namespace
 
@@ -34,14 +35,23 @@ void setup() {
   if (!displayOk) {
     ZO_LOGE("Display init failed");
   } else {
-    gDisplay.drawStatusScreen(cfg.versions.fwVersion, gWifi.statusText(), "scaffold ready");
+    gDisplay.drawStatusScreen(cfg.versions.fwVersion, gScheduler.wifiDiagnostics(),
+                              gScheduler.protocolDiagnostics());
   }
 
-  gScheduler.begin(&gWifi, &gProtocol);
+  gScheduler.begin(&gConfig, &gWifi, &gProtocol);
   ZO_LOGI("Setup complete");
 }
 
 void loop() {
   gScheduler.tick();
+
+  const uint32_t now = millis();
+  if (now - gLastDisplayUpdateMs > 3000) {
+    gLastDisplayUpdateMs = now;
+    gDisplay.drawStatusScreen(gConfig.get().versions.fwVersion, gScheduler.wifiDiagnostics(),
+                              gScheduler.protocolDiagnostics());
+  }
+
   delay(10);
 }

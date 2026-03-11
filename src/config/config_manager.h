@@ -11,9 +11,15 @@ class ConfigManager {
   bool load();
   bool save();
 
+  const String& apiKey() const;
+  const String& lastTimestamp() const;
+  void setLastTimestamp(const String& timestamp);
+
  private:
   RuntimeConfig cfg_{};
   void loadDefaults();
+  bool isValidApiKey(const String& apiKey) const;
+  String generateApiKey() const;
 };
 
 }  // namespace zivyobraz::config

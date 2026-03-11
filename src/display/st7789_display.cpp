@@ -51,17 +51,23 @@ void St7789Display::drawStatusScreen(const String& fwVersion, const String& wifi
   }
 
   tft_->fillScreen(ST77XX_BLACK);
-  tft_->setTextColor(ST77XX_WHITE);
+  tft_->setTextColor(ST77XX_CYAN);
   tft_->setTextSize(2);
-  tft_->setCursor(10, 20);
+  tft_->setCursor(6, 6);
   tft_->println("ZivyObraz");
-  tft_->println("TFT Client");
 
+  tft_->setTextColor(ST77XX_WHITE);
   tft_->setTextSize(1);
-  tft_->setCursor(10, 80);
+  tft_->setCursor(6, 30);
   tft_->printf("FW: %s\n", fwVersion.c_str());
-  tft_->printf("WiFi: %s\n", wifiStatus.c_str());
-  tft_->printf("Protocol: %s\n", protocolStatus.c_str());
+
+  tft_->setTextColor(ST77XX_GREEN);
+  tft_->setCursor(6, 50);
+  tft_->println(wifiStatus);
+
+  tft_->setTextColor(ST77XX_YELLOW);
+  tft_->setCursor(6, 132);
+  tft_->println(protocolStatus);
 }
 
 void St7789Display::setBacklight(bool on) {
