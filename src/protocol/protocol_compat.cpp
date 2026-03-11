@@ -6,6 +6,7 @@
 
 #include "diagnostics/log.h"
 #include "project_config.h"
+#include "protocol/http_body_stream.h"
 
 namespace zivyobraz::protocol {
 
@@ -63,7 +64,8 @@ bool ProtocolCompatService::shouldFetchImage(const String& previousTimestamp,
 }
 
 ProtocolResponse ProtocolCompatService::performSync(bool timestampCheck, const String& apiKey,
-                                                    const String& previousTimestamp) {
+                                                    const String& previousTimestamp,
+                                                    const BodyHandler& bodyHandler) {
   ProtocolResponse rsp;
   rsp.previousTimestamp = previousTimestamp;
 
@@ -179,23 +181,30 @@ ProtocolResponse ProtocolCompatService::performSync(bool timestampCheck, const S
           rsp.headers.partialRefresh ? 1 : 0, rsp.headers.showNoWifiError ? 1 : 0,
           rsp.hasOtaUpdate ? 1 : 0);
 
-  // For this milestone we consume and count body bytes only.
-  // TODO: In the next milestone route this stream directly into format detection/decoder,
-  // and commit timestamp only after successful decode + display render.
+  HttpBodyStream bodyStream(*client);
+
+  if (rsp.httpOk && rsp.hasNewContent && bodyHandler) {
+    ZO_LOGI("HTTP body handoff to decoder pipeline");
+    rsp.bodyHandled = bodyHandler(bodyStream, rsp);
+  }
+
   while (client->available() || client->connected()) {
-    if (!client->available()) {
-      delay(5);
-      continue;
-    }
-    const int b = client->read();
+    const int b = bodyStream.readByte();
     if (b < 0) {
       break;
     }
-    rsp.bodySize++;
   }
+
+  rsp.bodySize = bodyStream.bytesRead();
   rsp.bodyPresent = rsp.bodySize > 0;
+  if (rsp.hasNewContent && !rsp.bodyPresent) {
+    rsp.status = TransportStatus::ProtocolError;
+    rsp.errorMessage = "Timestamp changed but body missing";
+  }
+
   client->stop();
-  ZO_LOGI("HTTP end: bodyBytes=%u", static_cast<unsigned int>(rsp.bodySize));
+  ZO_LOGI("HTTP end: bodyBytes=%u handled=%d", static_cast<unsigned int>(rsp.bodySize),
+          rsp.bodyHandled ? 1 : 0);
 
   return rsp;
 }

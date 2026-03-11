@@ -35,11 +35,10 @@ void setup() {
   if (!displayOk) {
     ZO_LOGE("Display init failed");
   } else {
-    gDisplay.drawStatusScreen(cfg.versions.fwVersion, gScheduler.wifiDiagnostics(),
-                              gScheduler.protocolDiagnostics());
+    gDisplay.drawStatusScreen(gScheduler.statusSnapshot());
   }
 
-  gScheduler.begin(&gConfig, &gWifi, &gProtocol);
+  gScheduler.begin(&gConfig, &gWifi, &gProtocol, &gDisplay);
   ZO_LOGI("Setup complete");
 }
 
@@ -49,8 +48,7 @@ void loop() {
   const uint32_t now = millis();
   if (now - gLastDisplayUpdateMs > 3000) {
     gLastDisplayUpdateMs = now;
-    gDisplay.drawStatusScreen(gConfig.get().versions.fwVersion, gScheduler.wifiDiagnostics(),
-                              gScheduler.protocolDiagnostics());
+    gDisplay.drawStatusScreen(gScheduler.statusSnapshot());
   }
 
   delay(10);
