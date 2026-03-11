@@ -11,14 +11,16 @@ struct RequestMetadata {
   String apiVersion;
   String buildDate;
   String board;
-  String system;
-  String network;
-  String display;
-  String sensors;
+  String systemResetReason;
   String wifiSsid;
-  String localIp;
+  String ipAddress;
   String mac;
   int32_t rssi{0};
+  uint32_t apRetries{0};
+  String displayType;
+  uint16_t displayWidth{0};
+  uint16_t displayHeight{0};
+  String displayColorType;
 };
 
 struct ResponseHeaders {
@@ -51,6 +53,7 @@ enum class ProtocolResultClass : uint8_t {
   ProtocolMissingTimestamp,
   ProtocolBodyMissing,
   ProtocolDecodeRenderFailure,
+  ProtocolRequestInvalid,
 };
 
 enum class TransportStatus : uint8_t {

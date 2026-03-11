@@ -19,6 +19,12 @@ constexpr const char* kKeyLastTs = "last_ts";
 void ConfigManager::begin() {
   loadDefaults();
   load();
+
+  if (!isValidApiKey(cfg_.apiKey)) {
+    cfg_.apiKey = generateApiKey();
+    ZO_LOGW("API key invalid or missing after load; regenerated: %s", cfg_.apiKey.c_str());
+    save();
+  }
 }
 
 const RuntimeConfig& ConfigManager::get() const {
@@ -40,9 +46,11 @@ bool ConfigManager::load() {
   cfg_.lastTimestamp = prefs.getString(kKeyLastTs, "");
   prefs.end();
 
-  if (!isValidApiKey(cfg_.apiKey)) {
+  if (isValidApiKey(cfg_.apiKey)) {
+    ZO_LOGI("API key loaded from NVS: %s", cfg_.apiKey.c_str());
+  } else {
     cfg_.apiKey = generateApiKey();
-    ZO_LOGI("Generated new API key: %s", cfg_.apiKey.c_str());
+    ZO_LOGW("API key missing/invalid in NVS; regenerated: %s", cfg_.apiKey.c_str());
     save();
   }
 

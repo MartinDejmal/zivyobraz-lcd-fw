@@ -6,6 +6,8 @@
 
 #include <vector>
 
+#include <esp_system.h>
+
 #include "diagnostics/log.h"
 #include "project_config.h"
 #include "protocol/http_body_stream.h"
@@ -106,14 +108,15 @@ RequestMetadata ProtocolCompatService::buildMetadataPayload() const {
   payload.apiVersion = cfg_.versions.apiVersion;
   payload.buildDate = ZO_BUILD_DATE;
   payload.board = cfg_.boardName;
-  payload.system = "esp32-arduino";
-  payload.network = "wifi";
-  payload.display = "st7789-240x240";
-  payload.sensors = "";
+  payload.systemResetReason = String(esp_reset_reason());
   payload.wifiSsid = WiFi.SSID();
-  payload.localIp = WiFi.localIP().toString();
+  payload.ipAddress = WiFi.localIP().toString();
   payload.mac = WiFi.macAddress();
   payload.rssi = WiFi.RSSI();
+  payload.displayType = "st7789";
+  payload.displayWidth = cfg_.display.width;
+  payload.displayHeight = cfg_.display.height;
+  payload.displayColorType = "7C";
   return payload;
 }
 
@@ -126,7 +129,7 @@ bool ProtocolCompatService::shouldFetchImage(const String& previousTimestamp,
 }
 
 ProtocolResponse ProtocolCompatService::performSync(bool timestampCheck, const String& apiKey,
-                                                    const String& previousTimestamp,
+                                                    const String& previousTimestamp, uint32_t apRetries,
                                                     const BodyHandler& bodyHandler) {
   ProtocolResponse rsp;
   rsp.previousTimestamp = previousTimestamp;
@@ -140,11 +143,32 @@ ProtocolResponse ProtocolCompatService::performSync(bool timestampCheck, const S
   }
 
   RequestMetadata metadata = buildMetadataPayload();
+  metadata.apRetries = apRetries;
+
+  String validationError;
+  if (!validateRequestMetadata(metadata, apiKey, validationError)) {
+    rsp.status = TransportStatus::ProtocolError;
+    rsp.resultClass = ProtocolResultClass::ProtocolRequestInvalid;
+    rsp.errorMessage = validationError;
+    ZO_LOGE("Request validation failed: %s", validationError.c_str());
+    return rsp;
+  }
+
   const String body = buildMetadataJson(metadata);
   const String path = cfg_.server.endpointPath + "?timestampCheck=" + String(timestampCheck ? 1 : 0);
   const uint16_t port = cfg_.server.useHttps ? 443 : 80;
 
   if (wireDebugEnabled()) {
+    std::vector<String> systemFields;
+    if (!metadata.systemResetReason.isEmpty()) {
+      systemFields.push_back("resetReason");
+    }
+    std::vector<String> networkFields{"ssid", "rssi", "mac", "apRetries", "ipAddress"};
+    std::vector<String> displayFields{"type", "width", "height", "colorType"};
+
+    ZO_LOGI("[WireDbg] Request schema boardKind=string systemFields=%s networkFields=%s displayFields=%s apiKeyValid=%s",
+            joinFieldList(systemFields).c_str(), joinFieldList(networkFields).c_str(),
+            joinFieldList(displayFields).c_str(), (apiKey.length() == 8) ? "yes" : "no");
     ZO_LOGI("[WireDbg] Request transport=%s host=%s path=%s contentLength=%u apiKey=%s timestampCheck=%d",
             cfg_.server.useHttps ? "https" : "http", cfg_.server.host.c_str(), path.c_str(),
             static_cast<unsigned int>(body.length()), apiKey.c_str(), timestampCheck ? 1 : 0);
@@ -364,23 +388,85 @@ ProtocolResponse ProtocolCompatService::performSync(bool timestampCheck, const S
 
 String ProtocolCompatService::buildMetadataJson(const RequestMetadata& md) const {
   String json;
-  json.reserve(512);
+  json.reserve(640);
   json += "{";
   json += "\"fwVersion\":\"" + jsonEscape(md.fwVersion) + "\",";
   json += "\"apiVersion\":\"" + jsonEscape(md.apiVersion) + "\",";
   json += "\"buildDate\":\"" + jsonEscape(md.buildDate) + "\",";
-  json += "\"board\":{\"name\":\"" + jsonEscape(md.board) + "\"},";
-  json += "\"system\":{\"name\":\"" + jsonEscape(md.system) + "\"},";
-  json += "\"network\":{";
-  json += "\"type\":\"" + jsonEscape(md.network) + "\",";
-  json += "\"ssid\":\"" + jsonEscape(md.wifiSsid) + "\",";
-  json += "\"ip\":\"" + jsonEscape(md.localIp) + "\",";
-  json += "\"mac\":\"" + jsonEscape(md.mac) + "\",";
-  json += "\"rssi\":" + String(md.rssi);
+  json += "\"board\":\"" + jsonEscape(md.board) + "\",";
+
+  json += "\"system\":{";
+  if (!md.systemResetReason.isEmpty()) {
+    json += "\"resetReason\":\"" + jsonEscape(md.systemResetReason) + "\"";
+  }
   json += "},";
-  json += "\"display\":{\"type\":\"" + jsonEscape(md.display) + "\"}";
+
+  json += "\"network\":{";
+  json += "\"ssid\":\"" + jsonEscape(md.wifiSsid) + "\",";
+  json += "\"rssi\":" + String(md.rssi) + ",";
+  json += "\"mac\":\"" + jsonEscape(md.mac) + "\",";
+  json += "\"apRetries\":" + String(md.apRetries) + ",";
+  json += "\"ipAddress\":\"" + jsonEscape(md.ipAddress) + "\"";
+  json += "},";
+
+  json += "\"display\":{";
+  json += "\"type\":\"" + jsonEscape(md.displayType) + "\",";
+  json += "\"width\":" + String(md.displayWidth) + ",";
+  json += "\"height\":" + String(md.displayHeight) + ",";
+  json += "\"colorType\":\"" + jsonEscape(md.displayColorType) + "\"";
+  json += "}";
+
   json += "}";
   return json;
+}
+
+bool ProtocolCompatService::validateRequestMetadata(const RequestMetadata& md, const String& apiKey,
+                                                    String& validationError) const {
+  if (apiKey.length() != 8) {
+    validationError = "Invalid API key: must be 8 digits";
+    return false;
+  }
+  for (size_t i = 0; i < apiKey.length(); ++i) {
+    if (!isDigit(apiKey[i])) {
+      validationError = "Invalid API key: non-digit character";
+      return false;
+    }
+  }
+  if (md.board.isEmpty()) {
+    validationError = "Invalid request metadata: board is empty";
+    return false;
+  }
+  if (WiFi.status() == WL_CONNECTED && md.ipAddress.isEmpty()) {
+    validationError = "Invalid request metadata: network.ipAddress is empty";
+    return false;
+  }
+  if (md.displayWidth == 0) {
+    validationError = "Invalid request metadata: display.width must be > 0";
+    return false;
+  }
+  if (md.displayHeight == 0) {
+    validationError = "Invalid request metadata: display.height must be > 0";
+    return false;
+  }
+  if (md.displayColorType.isEmpty()) {
+    validationError = "Invalid request metadata: display.colorType is empty";
+    return false;
+  }
+  return true;
+}
+
+String ProtocolCompatService::joinFieldList(const std::vector<String>& fields) const {
+  if (fields.empty()) {
+    return "none";
+  }
+  String out;
+  for (size_t i = 0; i < fields.size(); ++i) {
+    if (i > 0) {
+      out += ",";
+    }
+    out += fields[i];
+  }
+  return out;
 }
 
 bool ProtocolCompatService::parseBoolHeaderValue(String value) const {

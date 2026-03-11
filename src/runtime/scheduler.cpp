@@ -61,7 +61,7 @@ void Scheduler::tick() {
   }
 
   lastProtocolResponse_ = protocol_->performSync(
-      timestampCheck, config_->apiKey(), config_->lastTimestamp(),
+      timestampCheck, config_->apiKey(), config_->lastTimestamp(), wifi_->apRetries(),
       [&](image::IByteStream& stream, protocol::ProtocolResponse& rsp) {
         rsp.decode = decoder.decode(stream, framebuffer, kProbeLimit);
         ZO_LOGI("Decode selected format=%d result=%d pixels=%u", static_cast<int>(rsp.decode.format),
@@ -138,6 +138,9 @@ String Scheduler::protocolDiagnostics() const {
   }
 
   String s = String(lastProtocolResponse_.httpStatusCode) + " " + resultClassName(lastProtocolResponse_.resultClass);
+  if (!lastProtocolResponse_.errorMessage.isEmpty()) {
+    s += " (" + lastProtocolResponse_.errorMessage + ")";
+  }
   return s;
 }
 
@@ -199,6 +202,8 @@ String Scheduler::resultClassName(protocol::ProtocolResultClass rc) const {
       return "missing_body";
     case protocol::ProtocolResultClass::ProtocolDecodeRenderFailure:
       return "decode_render";
+    case protocol::ProtocolResultClass::ProtocolRequestInvalid:
+      return "request_invalid";
     default:
       return "unknown";
   }
