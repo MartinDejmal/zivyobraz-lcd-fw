@@ -320,3 +320,24 @@ Nově je implementováno:
 1. Přidat PNG dekodér do stejného `ImageDecoderFacade` kontraktu.
 2. Po stabilizaci PNG doplnit sleep policy (`PreciseSleep` + deep sleep) a navázat partial refresh optimalizace v render backendu.
 3. Následně řešit OTA execution flow s bezpečným rollbackem.
+
+## 12. Milestone update: protocol wire diagnostics + missing Timestamp classification
+
+V tomto kroku byla doplněna cílená diagnostika protokolu (bez uvolnění produkčních pravidel):
+
+- Přidán debug přepínač `PROTOCOL_WIRE_DEBUG` (build flag) / runtime `protocolDebug.wireDebug` pro zapnutí detailních wire logů.
+- V debug režimu firmware loguje:
+  - raw HTTP status line,
+  - raw response headers (řádek po řádku),
+  - parsed interpretaci známých hlaviček,
+  - počet hlaviček a detekci oddělovače header/body,
+  - request payload JSON + host/path/transport/content-length/API key/`timestampCheck`.
+- Přidán bezpečný body preview (max 256 B) v HEX + ASCII a diagnostická klasifikace signatury (`PNG`, `Z1`, `Z2`, `Z3`, `HTML`, `text`, `unknown`) včetně offsetu.
+- Stav `HTTP 200 + body + chybějící Timestamp` je nově explicitně klasifikován jako protokolová nekompatibilita (`missing_ts`), nikoli jako běžný no-change scénář.
+- Debug-only probe při chybějícím `Timestamp` je ne-destruktivní: necommituje timestamp a nezměkčuje produkční rozhodnutí.
+- Přidán volitelný diagnostický fallback mód: po `timestampCheck=1` odpovědi bez `Timestamp` lze vynutit následující cyklus s `timestampCheck=0` (`forceTimestampCheckZeroOnMissingTimestamp`).
+- Diagnostická obrazovka zobrazuje navíc: protocol debug on/off, protokolovou klasifikaci, missing Timestamp flag, body probe klasifikaci a offset.
+
+### Pravděpodobný další krok
+
+Porovnat skutečný wire dump (raw status/headers/body preview) s očekávaným serverovým kontraktem a potvrdit, zda problém vzniká na straně serverové odpovědi nebo ve formátu hlaviček/flow režimu `timestampCheck`.

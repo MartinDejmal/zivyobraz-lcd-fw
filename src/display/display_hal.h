@@ -13,6 +13,8 @@ struct StatusSnapshot {
   String apiKey;
   String serverHost;
   String protocolStatus;
+  String protocolDebug;
+  String timestampMissing;
   String detectedFormat;
   String signatureOffset;
   String decodeResult;
@@ -20,6 +22,8 @@ struct StatusSnapshot {
   String storedTimestamp;
   String candidateTimestamp;
   String renderResult;
+  String bodyProbe;
+  String bodyProbeOffset;
 };
 
 class IDisplay {

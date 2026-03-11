@@ -30,6 +30,29 @@ struct ResponseHeaders {
   String otaUpdateUrl;
 };
 
+enum class BodyProbeKind : uint8_t {
+  None,
+  Png,
+  Z1,
+  Z2,
+  Z3,
+  Html,
+  Text,
+  Unknown,
+};
+
+enum class ProtocolResultClass : uint8_t {
+  None,
+  SuccessChanged,
+  SuccessUnchanged,
+  NetworkFailure,
+  HttpFailure,
+  ParseFailure,
+  ProtocolMissingTimestamp,
+  ProtocolBodyMissing,
+  ProtocolDecodeRenderFailure,
+};
+
 enum class TransportStatus : uint8_t {
   NotAttempted,
   Ok,
@@ -56,6 +79,12 @@ struct ProtocolResponse {
   image::DecodeResult decode{};
   String renderMessage;
   String errorMessage;
+  ProtocolResultClass resultClass{ProtocolResultClass::None};
+  bool missingRequiredTimestamp{false};
+  BodyProbeKind bodyProbeKind{BodyProbeKind::None};
+  int32_t bodyProbeOffset{-1};
+  String bodyPreviewHex;
+  String bodyPreviewAscii;
 };
 
 }  // namespace zivyobraz::protocol

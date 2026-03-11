@@ -57,35 +57,41 @@ void St7789Display::drawStatusScreen(const StatusSnapshot& status) {
   tft_->printf("FW:%s", status.fwVersion.c_str());
 
   tft_->setTextColor(ST77XX_GREEN);
-  tft_->setCursor(2, 16);
+  tft_->setCursor(2, 14);
   tft_->printf("WiFi:%s", status.wifiStatus.c_str());
 
   tft_->setTextColor(ST77XX_WHITE);
-  tft_->setCursor(2, 30);
+  tft_->setCursor(2, 26);
   tft_->printf("API:%s", status.apiKey.c_str());
-  tft_->setCursor(2, 42);
+  tft_->setCursor(2, 38);
   tft_->printf("Host:%s", status.serverHost.c_str());
 
   tft_->setTextColor(ST77XX_YELLOW);
-  tft_->setCursor(2, 56);
+  tft_->setCursor(2, 50);
   tft_->printf("Proto:%s", status.protocolStatus.c_str());
-  tft_->setCursor(2, 68);
-  tft_->printf("Fmt:%s off:%s", status.detectedFormat.c_str(), status.signatureOffset.c_str());
+  tft_->setCursor(2, 62);
+  tft_->printf("Dbg:%s missTS:%s", status.protocolDebug.c_str(), status.timestampMissing.c_str());
 
   tft_->setTextColor(ST77XX_MAGENTA);
-  tft_->setCursor(2, 80);
+  tft_->setCursor(2, 74);
+  tft_->printf("Fmt:%s off:%s", status.detectedFormat.c_str(), status.signatureOffset.c_str());
+  tft_->setCursor(2, 86);
+  tft_->printf("Probe:%s off:%s", status.bodyProbe.c_str(), status.bodyProbeOffset.c_str());
+
+  tft_->setTextColor(tft_->color565(255, 180, 60));
+  tft_->setCursor(2, 98);
   tft_->printf("Decode:%s", status.decodeResult.c_str());
-  tft_->setCursor(2, 92);
+  tft_->setCursor(2, 110);
   tft_->printf("Pixels:%s", status.pixelsDecoded.c_str());
 
   tft_->setTextColor(ST77XX_CYAN);
-  tft_->setCursor(2, 104);
+  tft_->setCursor(2, 122);
   tft_->printf("StoredTS:%s", status.storedTimestamp.c_str());
-  tft_->setCursor(2, 116);
+  tft_->setCursor(2, 134);
   tft_->printf("CandTS:%s", status.candidateTimestamp.c_str());
 
   tft_->setTextColor(tft_->color565(255, 165, 0));
-  tft_->setCursor(2, 128);
+  tft_->setCursor(2, 146);
   tft_->printf("Render:%s", status.renderResult.c_str());
 }
 

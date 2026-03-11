@@ -29,6 +29,8 @@ class Scheduler {
 
  private:
   String formatName(image::ImageFormat fmt) const;
+  String resultClassName(protocol::ProtocolResultClass rc) const;
+  String bodyProbeName(protocol::BodyProbeKind kind) const;
 
   config::ConfigManager* config_{nullptr};
   net::WifiManager* wifi_{nullptr};
@@ -38,6 +40,7 @@ class Scheduler {
   uint32_t lastTickMs_{0};
   protocol::ProtocolResponse lastProtocolResponse_{};
   String lastRenderResult_{"n/a"};
+  bool pendingDiagnosticImageFetch_{false};
 };
 
 }  // namespace zivyobraz::runtime

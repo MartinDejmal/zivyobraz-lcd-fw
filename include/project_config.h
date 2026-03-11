@@ -54,6 +54,12 @@ struct ProtocolVersionConfig {
   String apiVersion;
 };
 
+
+struct ProtocolDebugConfig {
+  bool wireDebug{false};
+  bool forceTimestampCheckZeroOnMissingTimestamp{false};
+};
+
 struct RuntimeConfig {
   String boardName;
   DisplayConfig display;
@@ -62,6 +68,7 @@ struct RuntimeConfig {
   ProtocolVersionConfig versions;
   String apiKey;
   String lastTimestamp;
+  ProtocolDebugConfig protocolDebug;
 };
 
 }  // namespace zivyobraz

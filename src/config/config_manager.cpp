@@ -111,6 +111,12 @@ void ConfigManager::loadDefaults() {
   cfg_.versions.apiVersion = ZO_API_VERSION;
   cfg_.apiKey = "";
   cfg_.lastTimestamp = "";
+#if defined(PROTOCOL_WIRE_DEBUG) && (PROTOCOL_WIRE_DEBUG == 1)
+  cfg_.protocolDebug.wireDebug = true;
+#else
+  cfg_.protocolDebug.wireDebug = false;
+#endif
+  cfg_.protocolDebug.forceTimestampCheckZeroOnMissingTimestamp = false;
 }
 
 bool ConfigManager::isValidApiKey(const String& apiKey) const {
