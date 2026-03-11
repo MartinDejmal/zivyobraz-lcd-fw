@@ -24,6 +24,9 @@ class ProtocolCompatService {
   RuntimeConfig cfg_{};
   String buildMetadataJson(const RequestMetadata& md) const;
   bool parseBoolHeaderValue(String value) const;
+  bool wireDebugEnabled() const;
+  BodyProbeKind probeBodySignature(const uint8_t* data, size_t len, int32_t& offset) const;
+  String bodyProbeKindText(BodyProbeKind kind) const;
 };
 
 }  // namespace zivyobraz::protocol

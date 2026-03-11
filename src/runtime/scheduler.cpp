@@ -52,8 +52,16 @@ void Scheduler::tick() {
   image::IndexedFramebuffer framebuffer;
   framebuffer.resize(config_->get().display.width, config_->get().display.height);
 
+  bool timestampCheck = true;
+  if (pendingDiagnosticImageFetch_ &&
+      config_->get().protocolDebug.forceTimestampCheckZeroOnMissingTimestamp) {
+    timestampCheck = false;
+    pendingDiagnosticImageFetch_ = false;
+    ZO_LOGW("Protocol diagnostic fallback: forcing one cycle timestampCheck=0");
+  }
+
   lastProtocolResponse_ = protocol_->performSync(
-      true, config_->apiKey(), config_->lastTimestamp(),
+      timestampCheck, config_->apiKey(), config_->lastTimestamp(),
       [&](image::IByteStream& stream, protocol::ProtocolResponse& rsp) {
         rsp.decode = decoder.decode(stream, framebuffer, kProbeLimit);
         ZO_LOGI("Decode selected format=%d result=%d pixels=%u", static_cast<int>(rsp.decode.format),
@@ -75,25 +83,34 @@ void Scheduler::tick() {
         return renderOk;
       });
 
-  if (!lastProtocolResponse_.candidateTimestamp.isEmpty() && lastProtocolResponse_.hasNewContent) {
+  if (config_->get().protocolDebug.forceTimestampCheckZeroOnMissingTimestamp &&
+      lastProtocolResponse_.missingRequiredTimestamp && timestampCheck) {
+    pendingDiagnosticImageFetch_ = true;
+  }
+
+  if (lastProtocolResponse_.resultClass == protocol::ProtocolResultClass::SuccessChanged) {
     if (!lastProtocolResponse_.bodyPresent) {
       ZO_LOGW("Timestamp not committed: body missing");
       lastRenderResult_ = "No body";
+      lastProtocolResponse_.resultClass = protocol::ProtocolResultClass::ProtocolBodyMissing;
     } else if (!lastProtocolResponse_.decode.success || !lastProtocolResponse_.renderSuccess) {
       ZO_LOGW("Timestamp not committed: decode/render failed");
       lastRenderResult_ = lastProtocolResponse_.renderMessage;
       if (lastRenderResult_.isEmpty()) {
         lastRenderResult_ = lastProtocolResponse_.decode.errorMessage;
       }
+      lastProtocolResponse_.resultClass = protocol::ProtocolResultClass::ProtocolDecodeRenderFailure;
     } else {
       config_->setLastTimestamp(lastProtocolResponse_.candidateTimestamp);
       config_->save();
       ZO_LOGI("Timestamp committed: %s", lastProtocolResponse_.candidateTimestamp.c_str());
       lastRenderResult_ = "Render OK + TS commit";
     }
-  } else if (!lastProtocolResponse_.candidateTimestamp.isEmpty()) {
+  } else if (lastProtocolResponse_.resultClass == protocol::ProtocolResultClass::SuccessUnchanged) {
     ZO_LOGI("Timestamp unchanged: %s", lastProtocolResponse_.candidateTimestamp.c_str());
     lastRenderResult_ = "Skipped (unchanged)";
+  } else if (lastProtocolResponse_.missingRequiredTimestamp) {
+    lastRenderResult_ = "Missing Timestamp";
   }
 
   state_ = SchedulerState::Idle;
@@ -120,10 +137,8 @@ String Scheduler::protocolDiagnostics() const {
     return "not attempted";
   }
 
-  if (!lastProtocolResponse_.httpOk) {
-    return String(lastProtocolResponse_.httpStatusCode);
-  }
-  return "200 OK";
+  String s = String(lastProtocolResponse_.httpStatusCode) + " " + resultClassName(lastProtocolResponse_.resultClass);
+  return s;
 }
 
 display::StatusSnapshot Scheduler::statusSnapshot() const {
@@ -137,6 +152,8 @@ display::StatusSnapshot Scheduler::statusSnapshot() const {
   s.apiKey = config_->apiKey();
   s.serverHost = config_->get().server.host;
   s.protocolStatus = protocolDiagnostics();
+  s.protocolDebug = config_->get().protocolDebug.wireDebug ? "on" : "off";
+  s.timestampMissing = lastProtocolResponse_.missingRequiredTimestamp ? "yes" : "no";
   s.detectedFormat = formatName(lastProtocolResponse_.decode.format);
   s.signatureOffset = String(lastProtocolResponse_.decode.signatureOffset);
   s.decodeResult = lastProtocolResponse_.decode.success ? "OK" : lastProtocolResponse_.decode.errorMessage;
@@ -144,6 +161,8 @@ display::StatusSnapshot Scheduler::statusSnapshot() const {
   s.storedTimestamp = config_->lastTimestamp();
   s.candidateTimestamp = lastProtocolResponse_.candidateTimestamp;
   s.renderResult = lastRenderResult_;
+  s.bodyProbe = bodyProbeName(lastProtocolResponse_.bodyProbeKind);
+  s.bodyProbeOffset = String(lastProtocolResponse_.bodyProbeOffset);
   return s;
 }
 
@@ -159,6 +178,50 @@ String Scheduler::formatName(image::ImageFormat fmt) const {
       return "Z3";
     default:
       return "unknown";
+  }
+}
+
+String Scheduler::resultClassName(protocol::ProtocolResultClass rc) const {
+  switch (rc) {
+    case protocol::ProtocolResultClass::SuccessChanged:
+      return "changed";
+    case protocol::ProtocolResultClass::SuccessUnchanged:
+      return "unchanged";
+    case protocol::ProtocolResultClass::NetworkFailure:
+      return "net_err";
+    case protocol::ProtocolResultClass::HttpFailure:
+      return "http_err";
+    case protocol::ProtocolResultClass::ParseFailure:
+      return "parse_err";
+    case protocol::ProtocolResultClass::ProtocolMissingTimestamp:
+      return "missing_ts";
+    case protocol::ProtocolResultClass::ProtocolBodyMissing:
+      return "missing_body";
+    case protocol::ProtocolResultClass::ProtocolDecodeRenderFailure:
+      return "decode_render";
+    default:
+      return "unknown";
+  }
+}
+
+String Scheduler::bodyProbeName(protocol::BodyProbeKind kind) const {
+  switch (kind) {
+    case protocol::BodyProbeKind::Png:
+      return "PNG";
+    case protocol::BodyProbeKind::Z1:
+      return "Z1";
+    case protocol::BodyProbeKind::Z2:
+      return "Z2";
+    case protocol::BodyProbeKind::Z3:
+      return "Z3";
+    case protocol::BodyProbeKind::Html:
+      return "HTML";
+    case protocol::BodyProbeKind::Text:
+      return "text";
+    case protocol::BodyProbeKind::Unknown:
+      return "unknown";
+    default:
+      return "none";
   }
 }
 
