@@ -1,8 +1,20 @@
 #include "config_manager.h"
 
+#include <Preferences.h>
+
 #include "diagnostics/log.h"
 
 namespace zivyobraz::config {
+
+namespace {
+constexpr const char* kPrefsNs = "zo_cfg";
+constexpr const char* kKeyWifiSsid = "wifi_ssid";
+constexpr const char* kKeyWifiPass = "wifi_pass";
+constexpr const char* kKeyHost = "host";
+constexpr const char* kKeyUseHttps = "https";
+constexpr const char* kKeyApiKey = "api_key";
+constexpr const char* kKeyLastTs = "last_ts";
+}
 
 void ConfigManager::begin() {
   loadDefaults();
@@ -14,15 +26,63 @@ const RuntimeConfig& ConfigManager::get() const {
 }
 
 bool ConfigManager::load() {
-  // TODO: Replace with NVS-backed persistence.
-  ZO_LOGI("ConfigManager::load() stub -> defaults active");
+  Preferences prefs;
+  if (!prefs.begin(kPrefsNs, true)) {
+    ZO_LOGW("ConfigManager::load() NVS begin failed, using defaults");
+    return false;
+  }
+
+  cfg_.wifi.ssid = prefs.getString(kKeyWifiSsid, cfg_.wifi.ssid);
+  cfg_.wifi.password = prefs.getString(kKeyWifiPass, cfg_.wifi.password);
+  cfg_.server.host = prefs.getString(kKeyHost, cfg_.server.host);
+  cfg_.server.useHttps = prefs.getBool(kKeyUseHttps, cfg_.server.useHttps);
+  cfg_.apiKey = prefs.getString(kKeyApiKey, "");
+  cfg_.lastTimestamp = prefs.getString(kKeyLastTs, "");
+  prefs.end();
+
+  if (!isValidApiKey(cfg_.apiKey)) {
+    cfg_.apiKey = generateApiKey();
+    ZO_LOGI("Generated new API key: %s", cfg_.apiKey.c_str());
+    save();
+  }
+
+  ZO_LOGI("Config loaded: host=%s https=%d ssid=%s ts=%s", cfg_.server.host.c_str(),
+          cfg_.server.useHttps ? 1 : 0, cfg_.wifi.ssid.c_str(), cfg_.lastTimestamp.c_str());
   return true;
 }
 
 bool ConfigManager::save() {
-  // TODO: Replace with NVS-backed persistence.
-  ZO_LOGI("ConfigManager::save() stub");
-  return true;
+  Preferences prefs;
+  if (!prefs.begin(kPrefsNs, false)) {
+    ZO_LOGE("ConfigManager::save() NVS begin failed");
+    return false;
+  }
+
+  bool ok = true;
+  ok &= prefs.putString(kKeyWifiSsid, cfg_.wifi.ssid) == cfg_.wifi.ssid.length();
+  ok &= prefs.putString(kKeyWifiPass, cfg_.wifi.password) == cfg_.wifi.password.length();
+  ok &= prefs.putString(kKeyHost, cfg_.server.host) == cfg_.server.host.length();
+  ok &= prefs.putBool(kKeyUseHttps, cfg_.server.useHttps);
+  ok &= prefs.putString(kKeyApiKey, cfg_.apiKey) == cfg_.apiKey.length();
+  ok &= prefs.putString(kKeyLastTs, cfg_.lastTimestamp) == cfg_.lastTimestamp.length();
+
+  prefs.end();
+  if (!ok) {
+    ZO_LOGW("ConfigManager::save() completed with one or more write failures");
+  }
+  return ok;
+}
+
+const String& ConfigManager::apiKey() const {
+  return cfg_.apiKey;
+}
+
+const String& ConfigManager::lastTimestamp() const {
+  return cfg_.lastTimestamp;
+}
+
+void ConfigManager::setLastTimestamp(const String& timestamp) {
+  cfg_.lastTimestamp = timestamp;
 }
 
 void ConfigManager::loadDefaults() {
@@ -49,6 +109,28 @@ void ConfigManager::loadDefaults() {
 
   cfg_.versions.fwVersion = ZO_FW_VERSION;
   cfg_.versions.apiVersion = ZO_API_VERSION;
+  cfg_.apiKey = "";
+  cfg_.lastTimestamp = "";
+}
+
+bool ConfigManager::isValidApiKey(const String& apiKey) const {
+  if (apiKey.length() != 8) {
+    return false;
+  }
+  for (size_t i = 0; i < apiKey.length(); ++i) {
+    if (!isDigit(apiKey[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+String ConfigManager::generateApiKey() const {
+  // Random 8-digit numeric key. Leading zeros are preserved.
+  uint32_t value = esp_random() % 100000000UL;
+  char buf[9] = {0};
+  snprintf(buf, sizeof(buf), "%08lu", static_cast<unsigned long>(value));
+  return String(buf);
 }
 
 }  // namespace zivyobraz::config
