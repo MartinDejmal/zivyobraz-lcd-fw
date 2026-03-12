@@ -8,6 +8,7 @@
 #include "image/indexed_framebuffer.h"
 #include "net/wifi_manager.h"
 #include "protocol/protocol_compat.h"
+#include "web/web_ui.h"
 
 namespace zivyobraz::runtime {
 
@@ -23,6 +24,10 @@ class Scheduler {
              protocol::ProtocolCompatService* protocol, display::IDisplay* display);
   void tick();
 
+  // Optional: attach a WebUI instance so the preview is updated after each
+  // successful render.  Call before the first tick().
+  void setWebUI(web::WebUI* webUI) { webUI_ = webUI; }
+
   String wifiDiagnostics() const;
   String protocolDiagnostics() const;
   display::StatusSnapshot statusSnapshot() const;
@@ -37,6 +42,7 @@ class Scheduler {
   net::WifiManager* wifi_{nullptr};
   protocol::ProtocolCompatService* protocol_{nullptr};
   display::IDisplay* display_{nullptr};
+  web::WebUI* webUI_{nullptr};
   SchedulerState state_{SchedulerState::Idle};
   uint32_t lastTickMs_{0};
   protocol::ProtocolResponse lastProtocolResponse_{};
