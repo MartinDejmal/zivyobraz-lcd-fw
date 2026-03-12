@@ -48,6 +48,8 @@ class Scheduler {
   protocol::ProtocolResponse lastProtocolResponse_{};
   String lastRenderResult_{"n/a"};
   bool pendingDiagnosticImageFetch_{false};
+  image::IndexedFramebuffer framebuffer_{};
+  bool framebufferReuseLogged_{false};
 };
 
 }  // namespace zivyobraz::runtime

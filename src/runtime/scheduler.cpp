@@ -1,5 +1,7 @@
 #include "scheduler.h"
 
+#include <esp_heap_caps.h>
+
 #include "diagnostics/log.h"
 
 namespace zivyobraz::runtime {
@@ -49,8 +51,27 @@ void Scheduler::tick() {
 
   state_ = SchedulerState::Sync;
   image::ImageDecoderFacade decoder;
-  image::IndexedFramebuffer framebuffer;
-  framebuffer.resize(config_->get().display.width, config_->get().display.height);
+  const uint16_t targetWidth = config_->get().display.width;
+  const uint16_t targetHeight = config_->get().display.height;
+  ZO_LOGI("Scheduler framebuffer request %ux%u, heap free=%u min=%u largest=%u",
+          static_cast<unsigned int>(targetWidth), static_cast<unsigned int>(targetHeight),
+          static_cast<unsigned int>(ESP.getFreeHeap()),
+          static_cast<unsigned int>(ESP.getMinFreeHeap()),
+          static_cast<unsigned int>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+
+  if (framebuffer_.width() != targetWidth || framebuffer_.height() != targetHeight) {
+    framebufferReuseLogged_ = false;
+    if (!framebuffer_.resize(targetWidth, targetHeight)) {
+      ZO_LOGE("Scheduler: framebuffer resize failed, skipping tick to keep firmware alive");
+      lastRenderResult_ = "Framebuffer alloc failed";
+      state_ = SchedulerState::Idle;
+      return;
+    }
+  } else if (!framebufferReuseLogged_) {
+    ZO_LOGI("Scheduler: framebuffer resize skipped, reusing existing %ux%u buffer",
+            static_cast<unsigned int>(targetWidth), static_cast<unsigned int>(targetHeight));
+    framebufferReuseLogged_ = true;
+  }
 
   bool timestampCheck = true;
   if (pendingDiagnosticImageFetch_ &&
@@ -63,7 +84,7 @@ void Scheduler::tick() {
   lastProtocolResponse_ = protocol_->performSync(
       timestampCheck, config_->apiKey(), config_->lastTimestamp(), wifi_->apRetries(),
       [&](image::IByteStream& stream, protocol::ProtocolResponse& rsp) {
-        rsp.decode = decoder.decode(stream, framebuffer, kProbeLimit);
+        rsp.decode = decoder.decode(stream, framebuffer_, kProbeLimit);
         ZO_LOGI("Decode selected format=%d result=%d pixels=%u", static_cast<int>(rsp.decode.format),
                 static_cast<int>(rsp.decode.status), static_cast<unsigned int>(rsp.decode.pixelsDecoded));
 
@@ -77,12 +98,12 @@ void Scheduler::tick() {
         }
 
         const bool renderOk =
-            display_->renderIndexed(framebuffer, rsp.headers.rotate, rsp.headers.partialRefresh);
+            display_->renderIndexed(framebuffer_, rsp.headers.rotate, rsp.headers.partialRefresh);
         rsp.renderSuccess = renderOk;
         rsp.renderMessage = renderOk ? "Render OK" : "Render failed";
 
         if (renderOk && webUI_ != nullptr) {
-          webUI_->updatePreview(framebuffer);
+          webUI_->updatePreview(framebuffer_);
         }
 
         return renderOk;
