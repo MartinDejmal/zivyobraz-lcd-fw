@@ -26,6 +26,7 @@ class Scheduler {
   String wifiDiagnostics() const;
   String protocolDiagnostics() const;
   display::StatusSnapshot statusSnapshot() const;
+  bool hasValidImage() const;
 
  private:
   String formatName(image::ImageFormat fmt) const;

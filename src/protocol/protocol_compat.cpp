@@ -327,7 +327,7 @@ ProtocolResponse ProtocolCompatService::performSync(bool timestampCheck, const S
   HttpBodyStream bodyStream(*client);
   PreviewingBodyStream previewStream(bodyStream);
 
-  if (rsp.httpOk && rsp.hasNewContent && bodyHandler) {
+  if (rsp.httpOk && bodyHandler) {
     ZO_LOGI("HTTP body handoff to decoder pipeline");
     rsp.bodyHandled = bodyHandler(previewStream, rsp);
   }

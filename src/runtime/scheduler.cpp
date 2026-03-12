@@ -5,7 +5,7 @@
 namespace zivyobraz::runtime {
 
 namespace {
-constexpr uint32_t kTickIntervalMs = 30000;
+constexpr uint32_t kTickIntervalMs = 90000;
 constexpr size_t kProbeLimit = 4096;
 }
 
@@ -107,13 +107,42 @@ void Scheduler::tick() {
       lastRenderResult_ = "Render OK + TS commit";
     }
   } else if (lastProtocolResponse_.resultClass == protocol::ProtocolResultClass::SuccessUnchanged) {
-    ZO_LOGI("Timestamp unchanged: %s", lastProtocolResponse_.candidateTimestamp.c_str());
-    lastRenderResult_ = "Skipped (unchanged)";
+    if (lastProtocolResponse_.bodyPresent) {
+      if (!lastProtocolResponse_.decode.success || !lastProtocolResponse_.renderSuccess) {
+        ZO_LOGW("Unchanged response body decode/render failed");
+        lastRenderResult_ = lastProtocolResponse_.renderMessage;
+        if (lastRenderResult_.isEmpty()) {
+          lastRenderResult_ = lastProtocolResponse_.decode.errorMessage;
+        }
+        lastProtocolResponse_.resultClass =
+            protocol::ProtocolResultClass::ProtocolDecodeRenderFailure;
+      } else {
+        ZO_LOGI("Timestamp unchanged, body rendered: %s",
+                lastProtocolResponse_.candidateTimestamp.c_str());
+        lastRenderResult_ = "Render OK (unchanged)";
+      }
+    } else {
+      ZO_LOGI("Timestamp unchanged: %s", lastProtocolResponse_.candidateTimestamp.c_str());
+      lastRenderResult_ = "Skipped (unchanged)";
+    }
   } else if (lastProtocolResponse_.missingRequiredTimestamp) {
     lastRenderResult_ = "Missing Timestamp";
   }
 
   state_ = SchedulerState::Idle;
+}
+
+bool Scheduler::hasValidImage() const {
+  if (lastProtocolResponse_.resultClass == protocol::ProtocolResultClass::SuccessChanged) {
+    return lastProtocolResponse_.renderSuccess;
+  }
+
+  if (lastProtocolResponse_.resultClass == protocol::ProtocolResultClass::SuccessUnchanged) {
+    return !lastProtocolResponse_.bodyPresent ||
+           (lastProtocolResponse_.decode.success && lastProtocolResponse_.renderSuccess);
+  }
+
+  return false;
 }
 
 String Scheduler::wifiDiagnostics() const {

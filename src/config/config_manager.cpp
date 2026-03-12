@@ -43,7 +43,8 @@ bool ConfigManager::load() {
   cfg_.server.host = prefs.getString(kKeyHost, cfg_.server.host);
   cfg_.server.useHttps = prefs.getBool(kKeyUseHttps, cfg_.server.useHttps);
   cfg_.apiKey = prefs.getString(kKeyApiKey, "");
-  cfg_.lastTimestamp = prefs.getString(kKeyLastTs, "");
+  // lastTimestamp is intentionally not loaded from NVS — after every reset the device
+  // always fetches fresh image data on the first sync cycle.
   prefs.end();
 
   if (isValidApiKey(cfg_.apiKey)) {
@@ -108,8 +109,8 @@ void ConfigManager::loadDefaults() {
       .bl = 4,
   };
 
-  cfg_.wifi.ssid = "TODO_WIFI_SSID";
-  cfg_.wifi.password = "TODO_WIFI_PASSWORD";
+  cfg_.wifi.ssid = "";
+  cfg_.wifi.password = "";
 
   cfg_.server.host = "cdn.zivyobraz.eu";
   cfg_.server.useHttps = true;

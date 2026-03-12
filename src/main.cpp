@@ -48,7 +48,10 @@ void loop() {
   const uint32_t now = millis();
   if (now - gLastDisplayUpdateMs > 3000) {
     gLastDisplayUpdateMs = now;
-    gDisplay.drawStatusScreen(gScheduler.statusSnapshot());
+    // Only show status screen if we don't have a valid image or in case of errors
+    if (!gScheduler.hasValidImage()) {
+      gDisplay.drawStatusScreen(gScheduler.statusSnapshot());
+    }
   }
 
   delay(10);
