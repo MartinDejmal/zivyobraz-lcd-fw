@@ -80,6 +80,11 @@ void Scheduler::tick() {
             display_->renderIndexed(framebuffer, rsp.headers.rotate, rsp.headers.partialRefresh);
         rsp.renderSuccess = renderOk;
         rsp.renderMessage = renderOk ? "Render OK" : "Render failed";
+
+        if (renderOk && webUI_ != nullptr) {
+          webUI_->updatePreview(framebuffer);
+        }
+
         return renderOk;
       });
 

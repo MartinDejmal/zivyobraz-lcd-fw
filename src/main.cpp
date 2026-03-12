@@ -8,6 +8,7 @@
 #include "project_config.h"
 #include "protocol/protocol_compat.h"
 #include "runtime/scheduler.h"
+#include "web/web_ui.h"
 
 namespace {
 
@@ -16,6 +17,7 @@ zivyobraz::display::St7789Display gDisplay;
 zivyobraz::net::WifiManager gWifi;
 zivyobraz::protocol::ProtocolCompatService gProtocol;
 zivyobraz::runtime::Scheduler gScheduler;
+zivyobraz::web::WebUI gWebUI;
 uint32_t gLastDisplayUpdateMs = 0;
 
 }  // namespace
@@ -39,11 +41,15 @@ void setup() {
   }
 
   gScheduler.begin(&gConfig, &gWifi, &gProtocol, &gDisplay);
+  gWebUI.begin(&gConfig, &gWifi);
+  gScheduler.setWebUI(&gWebUI);
+
   ZO_LOGI("Setup complete");
 }
 
 void loop() {
   gScheduler.tick();
+  gWebUI.tick();
 
   const uint32_t now = millis();
   if (now - gLastDisplayUpdateMs > 3000) {

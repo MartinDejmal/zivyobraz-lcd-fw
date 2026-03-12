@@ -2,7 +2,16 @@
 
 #include <Arduino.h>
 
-#define ZO_LOGI(fmt, ...) Serial.printf("[I] " fmt "\n", ##__VA_ARGS__)
-#define ZO_LOGW(fmt, ...) Serial.printf("[W] " fmt "\n", ##__VA_ARGS__)
-#define ZO_LOGE(fmt, ...) Serial.printf("[E] " fmt "\n", ##__VA_ARGS__)
+#include "log_buffer.h"
+
+namespace zivyobraz::diagnostics {
+
+// Writes a formatted log line to Serial and to the web debug ring buffer.
+void logLine(char level, const char* fmt, ...);
+
+}  // namespace zivyobraz::diagnostics
+
+#define ZO_LOGI(fmt, ...) zivyobraz::diagnostics::logLine('I', fmt, ##__VA_ARGS__)
+#define ZO_LOGW(fmt, ...) zivyobraz::diagnostics::logLine('W', fmt, ##__VA_ARGS__)
+#define ZO_LOGE(fmt, ...) zivyobraz::diagnostics::logLine('E', fmt, ##__VA_ARGS__)
 

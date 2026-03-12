@@ -275,7 +275,8 @@ Tento repozitář nyní obsahuje inicializační firmware scaffold v C++ pro Pla
 - `src/image` - detekce formátu + decoder rozhraní pro PNG/Z1/Z2/Z3.
 - `src/display` - display HAL a ST7789 backend, status screen + test primitives.
 - `src/runtime` - jednoduchý periodický state machine připravený pro fetch-render-sleep.
-- `src/diagnostics` - log makra a systémové info helpery.
+- `src/diagnostics` - log makra, systémové info helpery a kruhový log buffer pro web UI.
+- `src/web` - vestavěný HTTP server (port 80) s webovým rozhraním (4 záložky).
 
 ### Doporučené další kroky
 
@@ -357,3 +358,66 @@ V tomto kroku byl zpřísněn request kontrakt směrem k serverovému protokolu:
 - Přidána preflight validace requestu před odesláním (`apiKey`, `board`, `network.ipAddress`, `display.width/height/colorType`).
   - Při validační chybě se request neodešle.
 - Wire debug log nově obsahuje kompaktní schema summary (`boardKind`, `systemFields`, `networkFields`, `displayFields`, `apiKeyValid`).
+
+---
+
+## 14. Milestone update: webové rozhraní (Živý obraz / Konfigurace / Správa / Debug)
+
+Nově je implementováno kompletní vestavěné webové rozhraní (`src/web/web_ui.h`, `src/web/web_ui.cpp`) běžící na portu **80** přímo v ESP32 HTTP serveru (Arduino `WebServer`).
+
+### Záložky webového rozhraní
+
+| Záložka | URL fragment | Popis |
+|---------|-------------|-------|
+| 📷 **Živý obraz** | `#live` | Náhled aktuálního obrazu zobrazeného na LCD (BMP, automaticky se obnovuje každých 30 s) |
+| ⚙️ **Konfigurace** | `#cfg` | Editace WiFi SSID/hesla, adresy serveru a HTTPS přepínače; změny jsou okamžitě uloženy do NVS |
+| 🔧 **Správa** | `#adm` | Přehled verzí FW/API, čip, flash, SDK, uptime, volná RAM; tlačítko restart |
+| 🐛 **Debug** | `#dbg` | Real-time výpis všech log zpráv (polling 1 s); zachovává i výstup na sériový port |
+
+### HTTP API endpointy
+
+| Metoda | Endpoint | Popis |
+|--------|----------|-------|
+| `GET` | `/` | SPA HTML stránka |
+| `GET` | `/api/status` | JSON se stavem WiFi, IP, RSSI, konfigurací, systémovými informacemi |
+| `GET` | `/api/preview.bmp` | Aktuální obraz jako 8bpp Windows BMP (velikost závisí na rozlišení displeje) |
+| `GET` | `/api/log?since=N` | JSON `{ "lines": [...], "next": N }` s novými log řádky od indexu N |
+| `POST` | `/api/config` | Uloží konfiguraci WiFi/server (`application/x-www-form-urlencoded`) |
+| `POST` | `/api/restart` | Restartuje zařízení |
+
+### Přístup k rozhraní
+
+Po připojení zařízení do WiFi otevřete v prohlížeči:
+
+```
+http://<IP_ADRESA_ZARIZENI>/
+```
+
+IP adresu zařízení zjistíte na LCD diagnostické obrazovce nebo ze sériového portu (115 200 Bd).
+
+### Screenshot webového rozhraní
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ 📺 Živý obraz – LCD panel                                      │
+├────────────────────────────────────────────────────────────────┤
+│ WiFi: connected | IP: 192.168.1.42 | RSSI: -67 dBm | API: ... │
+├──────────┬──────────────┬──────────┬──────────────────────────┤
+│📷Živý ob.│⚙️Konfigurace │🔧Správa  │🐛Debug                   │
+├──────────┴──────────────┴──────────┴──────────────────────────┤
+│                                                                │
+│         [  aktuální obraz z LCD 240×240 px  ]                 │
+│                                                                │
+│                    [ 🔄 Obnovit nyní ]                        │
+└────────────────────────────────────────────────────────────────┘
+```
+
+> Skutečný screenshot je dostupný v prohlížeči po připojení k běžícímu zařízení na `http://<IP>/`.
+
+### Technické detaily implementace
+
+- **`src/web/web_ui.h` / `web_ui.cpp`** – třída `WebUI` (ESP32 Arduino `WebServer` na portu 80).
+- **`src/diagnostics/log_buffer.h` / `log_buffer.cpp`** – kruhový buffer posledních 100 log řádků; `gLogBuffer` je globální singleton dostupný z log makra.
+- **`src/diagnostics/log.h` / `log.cpp`** – log makra nyní zapisují do Serialu **i** do kruhového bufferu; sériový výstup je beze změny.
+- Náhled obrazu (`/api/preview.bmp`) je generován jako 8bpp Windows BMP přímo z posledního `IndexedFramebuffer` (volá `Scheduler::tick()` po každém úspěšném renderu přes `WebUI::updatePreview()`).
+- Konfigurace WiFi a serveru uložená přes web UI se projeví po restartu zařízení.

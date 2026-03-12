@@ -94,6 +94,27 @@ void ConfigManager::setLastTimestamp(const String& timestamp) {
   cfg_.lastTimestamp = timestamp;
 }
 
+bool ConfigManager::setWifi(const String& ssid, const String& password) {
+  cfg_.wifi.ssid = ssid;
+  // An empty password string means "keep the existing one" to avoid
+  // accidentally wiping credentials when only the SSID is changed.
+  if (!password.isEmpty()) {
+    cfg_.wifi.password = password;
+  }
+  ZO_LOGI("ConfigManager: WiFi config updated, ssid='%s'", cfg_.wifi.ssid.c_str());
+  return save();
+}
+
+bool ConfigManager::setServer(const String& host, bool useHttps) {
+  if (!host.isEmpty()) {
+    cfg_.server.host = host;
+  }
+  cfg_.server.useHttps = useHttps;
+  ZO_LOGI("ConfigManager: server config updated, host='%s' https=%d",
+          cfg_.server.host.c_str(), useHttps ? 1 : 0);
+  return save();
+}
+
 void ConfigManager::loadDefaults() {
   cfg_.boardName = "esp32dev";
   cfg_.display.type = DisplayType::St7789;
