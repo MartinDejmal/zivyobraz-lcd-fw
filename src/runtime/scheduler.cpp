@@ -18,11 +18,14 @@ void Scheduler::begin(config::ConfigManager* config, net::WifiManager* wifi,
   protocol_ = protocol;
   display_ = display;
   state_ = SchedulerState::Idle;
-  lastTickMs_ = 0;
 
   if (wifi_ != nullptr) {
     wifi_->connect(12000);
   }
+
+  // Set lastTickMs_ so that the first tick() fires immediately, without
+  // waiting for the full kTickIntervalMs after startup.
+  lastTickMs_ = millis() - kTickIntervalMs;
 }
 
 void Scheduler::tick() {
