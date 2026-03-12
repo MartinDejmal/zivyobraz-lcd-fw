@@ -186,6 +186,11 @@ display::StatusSnapshot Scheduler::statusSnapshot() const {
 
   s.fwVersion = config_->get().versions.fwVersion;
   s.wifiStatus = wifiDiagnostics();
+  if (wifi_ != nullptr && wifi_->isPortalActive()) {
+    s.wifiApSsid = wifi_->apSsid();
+    s.wifiPortalIp = wifi_->portalIp();
+    s.wifiApPassword = wifi_->apPassword();
+  }
   s.apiKey = config_->apiKey();
   s.serverHost = config_->get().server.host;
   s.protocolStatus = protocolDiagnostics();

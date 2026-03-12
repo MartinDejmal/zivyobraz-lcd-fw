@@ -95,6 +95,12 @@ void ConfigManager::setLastTimestamp(const String& timestamp) {
 }
 
 bool ConfigManager::setWifi(const String& ssid, const String& password) {
+  if (ssid.isEmpty() || ssid.length() > 32 || password.length() > 64) {
+    ZO_LOGW("ConfigManager: invalid WiFi config (ssid length=%u, pass length=%u)",
+            static_cast<unsigned>(ssid.length()), static_cast<unsigned>(password.length()));
+    return false;
+  }
+
   cfg_.wifi.ssid = ssid;
   // An empty password string means "keep the existing one" to avoid
   // accidentally wiping credentials when only the SSID is changed.

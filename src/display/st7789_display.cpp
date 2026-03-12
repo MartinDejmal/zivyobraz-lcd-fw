@@ -60,6 +60,25 @@ void St7789Display::drawStatusScreen(const StatusSnapshot& status) {
   tft_->setCursor(2, 14);
   tft_->printf("WiFi:%s", status.wifiStatus.c_str());
 
+  if (!status.wifiApSsid.isEmpty()) {
+    tft_->setTextColor(ST77XX_YELLOW);
+    tft_->setCursor(2, 26);
+    tft_->printf("CONFIG REZIM");
+    tft_->setCursor(2, 38);
+    tft_->printf("AP:%s", status.wifiApSsid.c_str());
+    tft_->setCursor(2, 50);
+    tft_->printf("PASS:%s", status.wifiApPassword.c_str());
+    tft_->setCursor(2, 62);
+    tft_->printf("IP:%s", status.wifiPortalIp.c_str());
+    tft_->setCursor(2, 74);
+    tft_->printf("1) Pripojit WiFi");
+    tft_->setCursor(2, 86);
+    tft_->printf("2) Otevrit portal");
+    tft_->setCursor(2, 98);
+    tft_->printf("3) Nastavit domaci");
+    return;
+  }
+
   tft_->setTextColor(ST77XX_WHITE);
   tft_->setCursor(2, 26);
   tft_->printf("API:%s", status.apiKey.c_str());
