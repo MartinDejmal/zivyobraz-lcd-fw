@@ -70,6 +70,12 @@ pre#lg{background:#161b22;border:1px solid #30363d;border-radius:4px;padding:12p
 <div id="cfg" class="tp">
 <h2>Konfigurace WiFi a serveru</h2>
 <form onsubmit="return false">
+<label>Dostupné WiFi sítě
+<select id="c-scan" style="width:100%;max-width:380px;padding:7px 10px;background:#161b22;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:13px;margin-top:3px" onchange="pickScan()">
+<option value="">-- Ručně zadejte SSID nebo vyberte síť --</option>
+</select>
+</label>
+<button class="btn sec" onclick="scanWifi()" type="button" style="margin-top:8px">&#128246; Proskenovat sítě</button>
 <label>WiFi SSID<input type="text" id="c-ssid" maxlength="32" placeholder="NázevSítě"></label>
 <label>WiFi heslo (prázdné = zachovat stávající)<input type="password" id="c-pass" maxlength="64" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"></label>
 <label>Server host<input type="text" id="c-host" maxlength="128" placeholder="cdn.zivyobraz.eu"></label>
@@ -107,7 +113,8 @@ function showTab(id,btn){
 function rfImg(){var i=document.getElementById('prev');i.src='/api/preview.bmp?_='+Date.now();}
 function loadSb(){
   fetch('/api/status').then(function(r){return r.json();}).then(function(d){
-    document.getElementById('sb').textContent='WiFi: '+d.wifi+' | IP: '+d.ip+' | RSSI: '+d.rssi+' dBm | API klíč: '+d.apiKey;
+    var mode=d.portalActive?'Konfigurační AP':'STA';
+    document.getElementById('sb').textContent='Režim: '+mode+' | WiFi: '+d.wifi+' | IP: '+d.ip+' | RSSI: '+d.rssi+' dBm | API klíč: '+d.apiKey;
   }).catch(function(){document.getElementById('sb').textContent='Nelze načíst stav';});
 }
 function loadCfg(){
@@ -118,6 +125,26 @@ function loadCfg(){
     document.getElementById('c-https').checked=!!d.httpsEnabled;
   }).catch(function(){});
 }
+
+function pickScan(){
+  var ssid=document.getElementById('c-scan').value;
+  if(ssid){document.getElementById('c-ssid').value=ssid;}
+}
+function scanWifi(){
+  fetch('/api/wifi/scan').then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){showM('cm','Scan selhal: '+(d.error||''),false);return;}
+    var sel=document.getElementById('c-scan');
+    sel.innerHTML='<option value="">-- Ručně zadejte SSID nebo vyberte síť --</option>';
+    (d.networks||[]).forEach(function(n){
+      var o=document.createElement('option');
+      o.value=n.ssid;
+      o.textContent=n.ssid+' ('+n.rssi+' dBm'+(n.secure?', zabezpečeno':'')+')';
+      sel.appendChild(o);
+    });
+    showM('cm','WiFi scan dokončen, nalezeno sítí: '+((d.networks||[]).length),true);
+  }).catch(function(){showM('cm','Scan selhal (chyba komunikace)',false);});
+}
+
 function saveCfg(){
   var body='ssid='+enc(document.getElementById('c-ssid').value)
           +'&pass='+enc(document.getElementById('c-pass').value)
@@ -125,7 +152,10 @@ function saveCfg(){
           +'&https='+(document.getElementById('c-https').checked?'1':'0');
   fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body})
   .then(function(r){return r.json();}).then(function(d){
-    showM('cm',d.ok?'Konfigurace uložena. Restartujte zařízení pro aktivaci.':'Chyba: '+(d.error||''),d.ok);
+    var msg=d.ok?'Konfigurace uložena. ':'Chyba: '+(d.error||'');
+    if(d.ok&&d.connected){msg+='WiFi připojeno, AP režim vypnut.';}
+    if(d.ok&&!d.connected){msg+='Připojení selhalo, AP režim zůstává aktivní.';}
+    showM('cm',msg,d.ok&&!!d.connected);
   }).catch(function(){showM('cm','Chyba komunikace',false);});
 }
 function showM(id,txt,ok){
@@ -191,6 +221,15 @@ void WebUI::begin(config::ConfigManager* config, net::WifiManager* wifi) {
   server_.on("/api/log", HTTP_GET, [this]() { handleApiLog(); });
   server_.on("/api/config", HTTP_POST, [this]() { handleApiConfig(); });
   server_.on("/api/restart", HTTP_POST, [this]() { handleApiRestart(); });
+  server_.on("/api/wifi/scan", HTTP_GET, [this]() { handleApiWifiScan(); });
+
+  server_.on("/generate_204", HTTP_GET, [this]() { handleGenerate204(); });      // Android
+  server_.on("/gen_204", HTTP_GET, [this]() { handleGenerate204(); });           // Android fallback
+  server_.on("/hotspot-detect.html", HTTP_GET, [this]() { handleHotspotDetect(); });  // iOS/macOS
+  server_.on("/connecttest.txt", HTTP_GET, [this]() { handleConnectTest(); });   // Windows
+  server_.on("/ncsi.txt", HTTP_GET, [this]() { handleConnectTest(); });           // Windows legacy
+
+  server_.onNotFound([this]() { handleCaptiveRedirect(); });
 
   server_.begin();
   ZO_LOGI("WebUI: HTTP server started on port 80");
@@ -231,6 +270,9 @@ void WebUI::handleApiStatus() {
   json += F(",\"ip\":\"");    json += escapeJson(wifi_->ip());           json += F("\"");
   json += F(",\"rssi\":");    json += String(wifi_->rssi());
   json += F(",\"ssid\":\"");  json += escapeJson(cfg.wifi.ssid);         json += F("\"");
+  json += F(",\"portalActive\":"); json += wifi_->isPortalActive() ? F("true") : F("false");
+  json += F(",\"apSsid\":\""); json += escapeJson(wifi_->apSsid()); json += F("\"");
+  json += F(",\"portalIp\":\""); json += escapeJson(wifi_->portalIp()); json += F("\"");
   json += F(",\"apiKey\":\""); json += escapeJson(cfg.apiKey);           json += F("\"");
   json += F(",\"host\":\"");  json += escapeJson(cfg.server.host);       json += F("\"");
   json += F(",\"httpsEnabled\":"); json += cfg.server.useHttps ? F("true") : F("false");
@@ -363,7 +405,7 @@ void WebUI::handleApiLog() {
 //   Fields: ssid, pass, host, https (0|1)
 // ---------------------------------------------------------------------------
 void WebUI::handleApiConfig() {
-  if (config_ == nullptr) {
+  if (config_ == nullptr || wifi_ == nullptr) {
     server_.send(503, "application/json", F("{\"ok\":false,\"error\":\"not ready\"}"));
     return;
   }
@@ -373,18 +415,31 @@ void WebUI::handleApiConfig() {
   const String host = server_.arg("host");
   const bool useHttps = server_.arg("https") == "1";
 
+  if (ssid.isEmpty()) {
+    server_.send(400, "application/json", F("{\"ok\":false,\"error\":\"SSID nesmi byt prazdne\"}"));
+    return;
+  }
+  if (ssid.length() > 32 || pass.length() > 64 || host.length() > 128) {
+    server_.send(400, "application/json", F("{\"ok\":false,\"error\":\"Neplatna delka vstupu\"}"));
+    return;
+  }
+
   bool wifiOk = config_->setWifi(ssid, pass);
   bool serverOk = config_->setServer(host, useHttps);
 
-  if (wifiOk && serverOk) {
-    server_.send(200, "application/json", F("{\"ok\":true}"));
-  } else if (!wifiOk && !serverOk) {
-    server_.send(200, "application/json", F("{\"ok\":false,\"error\":\"WiFi and server NVS save failed\"}"));
-  } else if (!wifiOk) {
-    server_.send(200, "application/json", F("{\"ok\":false,\"error\":\"WiFi NVS save failed\"}"));
-  } else {
-    server_.send(200, "application/json", F("{\"ok\":false,\"error\":\"Server NVS save failed\"}"));
+  if (!wifiOk || !serverOk) {
+    server_.send(500, "application/json", F("{\"ok\":false,\"error\":\"NVS save failed\"}"));
+    return;
   }
+
+  const bool connected = wifi_->applyConfigAndConnect(config_->get().wifi, 15000);
+  String json = F("{\"ok\":true,\"connected\":");
+  json += connected ? F("true") : F("false");
+  json += F(",\"portalActive\":");
+  json += wifi_->isPortalActive() ? F("true") : F("false");
+  json += F("}");
+
+  server_.send(200, "application/json", json);
 }
 
 // ---------------------------------------------------------------------------
@@ -394,6 +449,76 @@ void WebUI::handleApiRestart() {
   server_.send(200, "application/json", F("{\"ok\":true}"));
   delay(200);
   esp_restart();
+}
+
+
+void WebUI::handleApiWifiScan() {
+  if (wifi_ == nullptr) {
+    server_.send(503, "application/json", F("{\"ok\":false,\"error\":\"wifi not ready\"}"));
+    return;
+  }
+
+  const int count = WiFi.scanNetworks(false, true);
+  if (count < 0) {
+    server_.send(500, "application/json", F("{\"ok\":false,\"error\":\"scan failed\"}"));
+    return;
+  }
+
+  String json;
+  json.reserve(1024);
+  json = F("{\"ok\":true,\"networks\":[");
+  for (int i = 0; i < count; ++i) {
+    if (i > 0) {
+      json += ',';
+    }
+    json += F("{\"ssid\":\"");
+    json += escapeJson(WiFi.SSID(i));
+    json += F("\",\"rssi\":");
+    json += WiFi.RSSI(i);
+    json += F(",\"secure\":");
+    json += (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? F("false") : F("true");
+    json += '}';
+  }
+  json += F("]}");
+
+  WiFi.scanDelete();
+  server_.send(200, "application/json", json);
+}
+
+void WebUI::handleGenerate204() {
+  if (wifi_ != nullptr && wifi_->isPortalActive()) {
+    server_.sendHeader(F("Location"), String("http://") + wifi_->portalIp() + "/", true);
+    server_.send(302, "text/plain", "");
+    return;
+  }
+  server_.send(204, "text/plain", "");
+}
+
+void WebUI::handleHotspotDetect() {
+  if (wifi_ != nullptr && wifi_->isPortalActive()) {
+    server_.sendHeader(F("Location"), String("http://") + wifi_->portalIp() + "/", true);
+    server_.send(302, "text/plain", "");
+    return;
+  }
+  server_.send(200, "text/plain", "Success");
+}
+
+void WebUI::handleConnectTest() {
+  if (wifi_ != nullptr && wifi_->isPortalActive()) {
+    server_.sendHeader(F("Location"), String("http://") + wifi_->portalIp() + "/", true);
+    server_.send(302, "text/plain", "");
+    return;
+  }
+  server_.send(200, "text/plain", "Microsoft Connect Test");
+}
+
+void WebUI::handleCaptiveRedirect() {
+  if (wifi_ != nullptr && wifi_->isPortalActive()) {
+    server_.sendHeader(F("Location"), String("http://") + wifi_->portalIp() + "/", true);
+    server_.send(302, "text/plain", "");
+    return;
+  }
+  server_.send(404, "text/plain", "Not found");
 }
 
 // ---------------------------------------------------------------------------

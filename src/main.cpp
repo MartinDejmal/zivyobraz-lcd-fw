@@ -30,7 +30,7 @@ void setup() {
 
   zivyobraz::core::logBootBanner(cfg.boardName);
 
-  gWifi.begin(cfg.wifi);
+  gWifi.begin(cfg.wifi, cfg.boardName);
   gProtocol.begin(cfg);
 
   const bool displayOk = gDisplay.begin(cfg.display);

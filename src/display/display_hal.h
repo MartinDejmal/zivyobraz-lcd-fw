@@ -10,6 +10,9 @@ namespace zivyobraz::display {
 struct StatusSnapshot {
   String fwVersion;
   String wifiStatus;
+  String wifiApSsid;
+  String wifiPortalIp;
+  String wifiApPassword;
   String apiKey;
   String serverHost;
   String protocolStatus;
