@@ -1,6 +1,5 @@
 #include "st7789_display.h"
 
-#include <SPI.h>
 #include <memory>
 
 #include "diagnostics/log.h"
@@ -9,9 +8,12 @@ namespace zivyobraz::display {
 
 bool St7789Display::begin(const DisplayConfig& cfg) {
   cfg_ = cfg;
-  tft_ = std::make_unique<Adafruit_ST7789>(cfg_.pins.cs, cfg_.pins.dc, cfg_.pins.rst);
-  SPI.begin(cfg_.pins.sclk, -1, cfg_.pins.mosi, cfg_.pins.cs);
-  tft_->init(cfg_.width, cfg_.height, SPI_MODE3);
+  // TFT_eSPI uses compile-time pin configuration (TFT_MOSI, TFT_SCLK, TFT_CS,
+  // TFT_DC, TFT_RST) defined via build flags in platformio.ini.
+  // The SPI bus and display reset are handled internally by TFT_eSPI::init().
+  // Only cfg_.pins.bl (backlight) and cfg_.rotation remain runtime-configurable.
+  tft_ = std::make_unique<TFT_eSPI>();
+  tft_->init();
   tft_->setRotation(cfg_.rotation);
 
   if (cfg_.pins.bl >= 0) {
@@ -38,11 +40,11 @@ void St7789Display::drawTestPattern() {
     return;
   }
 
-  tft_->fillScreen(ST77XX_BLACK);
-  tft_->fillRect(0, 0, cfg_.width / 2, cfg_.height / 2, ST77XX_RED);
-  tft_->fillRect(cfg_.width / 2, 0, cfg_.width / 2, cfg_.height / 2, ST77XX_GREEN);
-  tft_->fillRect(0, cfg_.height / 2, cfg_.width / 2, cfg_.height / 2, ST77XX_BLUE);
-  tft_->fillRect(cfg_.width / 2, cfg_.height / 2, cfg_.width / 2, cfg_.height / 2, ST77XX_YELLOW);
+  tft_->fillScreen(TFT_BLACK);
+  tft_->fillRect(0, 0, cfg_.width / 2, cfg_.height / 2, TFT_RED);
+  tft_->fillRect(cfg_.width / 2, 0, cfg_.width / 2, cfg_.height / 2, TFT_GREEN);
+  tft_->fillRect(0, cfg_.height / 2, cfg_.width / 2, cfg_.height / 2, TFT_BLUE);
+  tft_->fillRect(cfg_.width / 2, cfg_.height / 2, cfg_.width / 2, cfg_.height / 2, TFT_YELLOW);
 }
 
 void St7789Display::drawStatusScreen(const StatusSnapshot& status) {
@@ -50,18 +52,18 @@ void St7789Display::drawStatusScreen(const StatusSnapshot& status) {
     return;
   }
 
-  tft_->fillScreen(ST77XX_BLACK);
-  tft_->setTextColor(ST77XX_CYAN);
+  tft_->fillScreen(TFT_BLACK);
+  tft_->setTextColor(TFT_CYAN);
   tft_->setTextSize(1);
   tft_->setCursor(2, 2);
   tft_->printf("FW:%s", status.fwVersion.c_str());
 
-  tft_->setTextColor(ST77XX_GREEN);
+  tft_->setTextColor(TFT_GREEN);
   tft_->setCursor(2, 14);
   tft_->printf("WiFi:%s", status.wifiStatus.c_str());
 
   if (!status.wifiApSsid.isEmpty()) {
-    tft_->setTextColor(ST77XX_YELLOW);
+    tft_->setTextColor(TFT_YELLOW);
     tft_->setCursor(2, 26);
     tft_->printf("CONFIG REZIM");
     tft_->setCursor(2, 38);
@@ -79,19 +81,19 @@ void St7789Display::drawStatusScreen(const StatusSnapshot& status) {
     return;
   }
 
-  tft_->setTextColor(ST77XX_WHITE);
+  tft_->setTextColor(TFT_WHITE);
   tft_->setCursor(2, 26);
   tft_->printf("API:%s", status.apiKey.c_str());
   tft_->setCursor(2, 38);
   tft_->printf("Host:%s", status.serverHost.c_str());
 
-  tft_->setTextColor(ST77XX_YELLOW);
+  tft_->setTextColor(TFT_YELLOW);
   tft_->setCursor(2, 50);
   tft_->printf("Proto:%s", status.protocolStatus.c_str());
   tft_->setCursor(2, 62);
   tft_->printf("Dbg:%s missTS:%s", status.protocolDebug.c_str(), status.timestampMissing.c_str());
 
-  tft_->setTextColor(ST77XX_MAGENTA);
+  tft_->setTextColor(TFT_MAGENTA);
   tft_->setCursor(2, 74);
   tft_->printf("Fmt:%s off:%s", status.detectedFormat.c_str(), status.signatureOffset.c_str());
   tft_->setCursor(2, 86);
@@ -103,7 +105,7 @@ void St7789Display::drawStatusScreen(const StatusSnapshot& status) {
   tft_->setCursor(2, 110);
   tft_->printf("Pixels:%s", status.pixelsDecoded.c_str());
 
-  tft_->setTextColor(ST77XX_CYAN);
+  tft_->setTextColor(TFT_CYAN);
   tft_->setCursor(2, 122);
   tft_->printf("StoredTS:%s", status.storedTimestamp.c_str());
   tft_->setCursor(2, 134);
@@ -158,21 +160,21 @@ void St7789Display::setBacklight(bool on) {
 uint16_t St7789Display::mapColorIndex(uint8_t colorIndex) const {
   switch (colorIndex) {
     case 0:
-      return ST77XX_WHITE;
+      return TFT_WHITE;
     case 1:
-      return ST77XX_BLACK;
+      return TFT_BLACK;
     case 2:
-      return ST77XX_RED;
+      return TFT_RED;
     case 3:
-      return ST77XX_YELLOW;
+      return TFT_YELLOW;
     case 4:
-      return ST77XX_GREEN;
+      return TFT_GREEN;
     case 5:
-      return ST77XX_BLUE;
+      return TFT_BLUE;
     case 6:
       return tft_->color565(255, 165, 0);
     default:
-      return ST77XX_BLACK;
+      return TFT_BLACK;
   }
 }
 
