@@ -122,6 +122,21 @@ bool ConfigManager::setServer(const String& host, bool useHttps) {
 }
 
 void ConfigManager::loadDefaults() {
+#if defined(ZO_DISPLAY_SHARP_MIP)
+  cfg_.boardName = "esp32c3-sharp-ls027b7dh01";
+  cfg_.display.type = DisplayType::SharpMip;
+  cfg_.display.width = 400;
+  cfg_.display.height = 240;
+  cfg_.display.rotation = 0;
+  cfg_.display.pins = {
+      .mosi = 7,
+      .sclk = 6,
+      .cs = 10,
+      .dc = -1,  // DISP pin (SpiPins.dc reused): HIGH=display on, -1=always on
+      .rst = -1,
+      .bl = -1,  // no backlight (reflective display)
+  };
+#else
   cfg_.boardName = "esp32dev";
   cfg_.display.type = DisplayType::St7789;
   cfg_.display.width = 240;
@@ -135,6 +150,7 @@ void ConfigManager::loadDefaults() {
       .rst = 17,
       .bl = 4,
   };
+#endif
 
   cfg_.wifi.ssid = "";
   cfg_.wifi.password = "";
