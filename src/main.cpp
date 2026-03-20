@@ -3,17 +3,26 @@
 #include "config/config_manager.h"
 #include "core/boot.h"
 #include "diagnostics/log.h"
-#include "display/st7789_display.h"
 #include "net/wifi_manager.h"
 #include "project_config.h"
 #include "protocol/protocol_compat.h"
 #include "runtime/scheduler.h"
 #include "web/web_ui.h"
 
+#if defined(ZO_DISPLAY_SHARP_MIP)
+#include "display/sharp_mip_display.h"
+#else
+#include "display/st7789_display.h"
+#endif
+
 namespace {
 
 zivyobraz::config::ConfigManager gConfig;
+#if defined(ZO_DISPLAY_SHARP_MIP)
+zivyobraz::display::SharpMipDisplay gDisplay;
+#else
 zivyobraz::display::St7789Display gDisplay;
+#endif
 zivyobraz::net::WifiManager gWifi;
 zivyobraz::protocol::ProtocolCompatService gProtocol;
 zivyobraz::runtime::Scheduler gScheduler;
