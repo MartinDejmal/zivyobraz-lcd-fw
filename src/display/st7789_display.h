@@ -1,7 +1,6 @@
 #pragma once
 
-#include <Adafruit_GFX.h>
-#include <Adafruit_ST7789.h>
+#include <TFT_eSPI.h>
 
 #include <memory>
 
@@ -25,7 +24,7 @@ class St7789Display final : public IDisplay {
                       uint16_t& outY) const;
 
   DisplayConfig cfg_{};
-  std::unique_ptr<Adafruit_ST7789> tft_{};
+  std::unique_ptr<TFT_eSPI> tft_{};
   bool initialized_{false};
 };
 
