@@ -75,25 +75,28 @@ String formatAsciiPreview(const uint8_t* data, size_t len) {
 
 class PreviewingBodyStream final : public image::IByteStream {
  public:
-  explicit PreviewingBodyStream(HttpBodyStream& inner) : inner_(inner) {
-    preview_.reserve(kBodyPreviewLimit);
-  }
+  explicit PreviewingBodyStream(HttpBodyStream& inner) : inner_(inner) {}
 
   int readByte() override {
     const int b = inner_.readByte();
-    if (b >= 0 && preview_.size() < kBodyPreviewLimit) {
-      preview_.push_back(static_cast<uint8_t>(b));
+    if (b >= 0 && previewSize_ < kBodyPreviewLimit) {
+      preview_[previewSize_++] = static_cast<uint8_t>(b);
     }
     return b;
   }
 
-  const std::vector<uint8_t>& preview() const {
+  const uint8_t* previewData() const {
     return preview_;
+  }
+
+  size_t previewSize() const {
+    return previewSize_;
   }
 
  private:
   HttpBodyStream& inner_;
-  std::vector<uint8_t> preview_;
+  uint8_t preview_[kBodyPreviewLimit] = {};
+  size_t previewSize_{0};
 };
 
 }  // namespace
@@ -342,17 +345,18 @@ ProtocolResponse ProtocolCompatService::performSync(bool timestampCheck, const S
   rsp.bodySize = bodyStream.bytesRead();
   rsp.bodyPresent = rsp.bodySize > 0;
 
-  const auto& preview = previewStream.preview();
-  if (!preview.empty()) {
-    rsp.bodyPreviewHex = formatHexPreview(preview.data(), preview.size());
-    rsp.bodyPreviewAscii = formatAsciiPreview(preview.data(), preview.size());
-    rsp.bodyProbeKind = probeBodySignature(preview.data(), preview.size(), rsp.bodyProbeOffset);
+  const uint8_t* previewData = previewStream.previewData();
+  const size_t previewSize = previewStream.previewSize();
+  if (previewSize > 0) {
+    rsp.bodyPreviewHex = formatHexPreview(previewData, previewSize);
+    rsp.bodyPreviewAscii = formatAsciiPreview(previewData, previewSize);
+    rsp.bodyProbeKind = probeBodySignature(previewData, previewSize, rsp.bodyProbeOffset);
   }
 
   if (wireDebugEnabled()) {
-    ZO_LOGI("[WireDbg] Body preview bytes=%u%s", static_cast<unsigned int>(preview.size()),
-            (rsp.bodySize > preview.size()) ? " (truncated)" : "");
-    if (!preview.empty()) {
+    ZO_LOGI("[WireDbg] Body preview bytes=%u%s", static_cast<unsigned int>(previewSize),
+            (rsp.bodySize > previewSize) ? " (truncated)" : "");
+    if (previewSize > 0) {
       ZO_LOGI("[WireDbg] Body preview HEX: %s", rsp.bodyPreviewHex.c_str());
       ZO_LOGI("[WireDbg] Body preview ASCII: %s", rsp.bodyPreviewAscii.c_str());
       ZO_LOGI("[WireDbg] Body probe: kind=%s offset=%ld", bodyProbeKindText(rsp.bodyProbeKind).c_str(),

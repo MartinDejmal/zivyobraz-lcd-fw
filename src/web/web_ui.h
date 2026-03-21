@@ -43,7 +43,7 @@ class WebUI {
   WebServer server_{80};
   config::ConfigManager* config_{nullptr};
   net::WifiManager* wifi_{nullptr};
-  image::IndexedFramebuffer lastFramebuffer_;
+  const image::IndexedFramebuffer* previewFramebuffer_{nullptr};
   bool hasPreview_{false};
 };
 

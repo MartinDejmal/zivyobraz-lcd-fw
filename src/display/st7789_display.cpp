@@ -141,7 +141,7 @@ bool St7789Display::renderIndexed(const image::IndexedFramebuffer& framebuffer, 
         ZO_LOGE("Render failed: invalid rotate=%d", rotate);
         return false;
       }
-      tft_->writePixel(dstX, dstY, mapColorIndex(index));
+      tft_->drawPixel(dstX, dstY, mapColorIndex(index));
     }
   }
 

@@ -29,7 +29,7 @@ class SharpMipDisplay final : public IDisplay {
                       uint16_t& outY) const;
 
   DisplayConfig cfg_{};
-  std::unique_ptr<U8G2_LS027B7DH01_400X240_F_4W_HW_SPI> u8g2_{};
+  std::unique_ptr<U8G2_LS027B7DH01_400X240_F_4W_SW_SPI> u8g2_{};
   bool initialized_{false};
 };
 

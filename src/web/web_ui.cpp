@@ -2,6 +2,7 @@
 
 #include <WiFi.h>
 
+#include <new>
 #include <vector>
 
 #include "diagnostics/log.h"
@@ -240,7 +241,7 @@ void WebUI::tick() {
 }
 
 void WebUI::updatePreview(const image::IndexedFramebuffer& framebuffer) {
-  lastFramebuffer_ = framebuffer;
+  previewFramebuffer_ = &framebuffer;
   hasPreview_ = true;
 }
 
@@ -294,13 +295,13 @@ void WebUI::handleApiStatus() {
 // Route: GET /api/preview.bmp  → 8-bpp Windows BMP from last framebuffer
 // ---------------------------------------------------------------------------
 void WebUI::handleApiPreview() {
-  if (!hasPreview_) {
+  if (!hasPreview_ || previewFramebuffer_ == nullptr) {
     server_.send(404, "text/plain", F("No preview available yet"));
     return;
   }
 
-  const uint16_t w = lastFramebuffer_.width();
-  const uint16_t h = lastFramebuffer_.height();
+  const uint16_t w = previewFramebuffer_->width();
+  const uint16_t h = previewFramebuffer_->height();
 
   // BMP rows must be padded to a multiple of 4 bytes.
   const uint32_t rowStride = ((uint32_t)w + 3u) & ~3u;
@@ -371,7 +372,7 @@ void WebUI::handleApiPreview() {
   for (int32_t y = static_cast<int32_t>(h) - 1; y >= 0; --y) {
     for (uint16_t x = 0; x < w; ++x) {
       uint8_t idx = 0;
-      lastFramebuffer_.getPixel(x, static_cast<uint16_t>(y), idx);
+      previewFramebuffer_->getPixel(x, static_cast<uint16_t>(y), idx);
       row[x] = idx;
     }
     // Padding bytes (row[w..rowStride-1]) remain 0.

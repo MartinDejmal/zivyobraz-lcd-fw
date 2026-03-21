@@ -1,7 +1,7 @@
 #include "sharp_mip_display.h"
 
-#include <SPI.h>
 #include <memory>
+#include <new>
 
 #include "diagnostics/log.h"
 
@@ -9,15 +9,20 @@ namespace zivyobraz::display {
 
 bool SharpMipDisplay::begin(const DisplayConfig& cfg) {
   cfg_ = cfg;
-  // Initialise the hardware SPI bus with runtime-configurable pins before
-  // creating the U8G2 instance.  The Sharp LS027B7DH01 has no DC/RS line;
-  // U8G2_PIN_NONE is passed for that parameter so U8G2 does not toggle it.
-  SPI.begin(cfg_.pins.sclk, -1 /* miso */, cfg_.pins.mosi, -1 /* ss */);
-
-  u8g2_ = std::make_unique<U8G2_LS027B7DH01_400X240_F_4W_HW_SPI>(
-      U8G2_R0, static_cast<uint8_t>(cfg_.pins.cs),
+  // Use nothrow allocation so low-memory does not throw and reset the MCU.
+  // Use SW SPI on ESP32-C3 to avoid HW-SPI default MISO attachment path.
+  u8g2_.reset(new (std::nothrow) U8G2_LS027B7DH01_400X240_F_4W_SW_SPI(
+      U8G2_R0, static_cast<uint8_t>(cfg_.pins.sclk), static_cast<uint8_t>(cfg_.pins.mosi),
+      static_cast<uint8_t>(cfg_.pins.cs),
       U8X8_PIN_NONE,  // dc: not used by Sharp Memory LCD
-      cfg_.pins.rst >= 0 ? static_cast<uint8_t>(cfg_.pins.rst) : U8X8_PIN_NONE);
+      cfg_.pins.rst >= 0 ? static_cast<uint8_t>(cfg_.pins.rst) : U8X8_PIN_NONE));
+
+  if (!u8g2_) {
+    ZO_LOGE("SharpMip: U8G2 allocation failed (heap free=%u min=%u)",
+            static_cast<unsigned int>(ESP.getFreeHeap()),
+            static_cast<unsigned int>(ESP.getMinFreeHeap()));
+    return false;
+  }
 
   if (!u8g2_->begin()) {
     ZO_LOGE("SharpMip: U8G2 begin failed");

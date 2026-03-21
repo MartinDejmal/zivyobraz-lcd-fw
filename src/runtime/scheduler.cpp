@@ -1,6 +1,7 @@
 #include "scheduler.h"
 
 #include <esp_heap_caps.h>
+#include <new>
 
 #include "diagnostics/log.h"
 
@@ -53,109 +54,141 @@ void Scheduler::tick() {
   }
 
   state_ = SchedulerState::Sync;
-  image::ImageDecoderFacade decoder;
-  const uint16_t targetWidth = config_->get().display.width;
-  const uint16_t targetHeight = config_->get().display.height;
-  ZO_LOGI("Scheduler framebuffer request %ux%u, heap free=%u min=%u largest=%u",
-          static_cast<unsigned int>(targetWidth), static_cast<unsigned int>(targetHeight),
-          static_cast<unsigned int>(ESP.getFreeHeap()),
-          static_cast<unsigned int>(ESP.getMinFreeHeap()),
-          static_cast<unsigned int>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
-
-  if (framebuffer_.width() != targetWidth || framebuffer_.height() != targetHeight) {
-    framebufferReuseLogged_ = false;
-    if (!framebuffer_.resize(targetWidth, targetHeight)) {
-      ZO_LOGE("Scheduler: framebuffer resize failed, skipping tick to keep firmware alive");
-      lastRenderResult_ = "Framebuffer alloc failed";
-      state_ = SchedulerState::Idle;
-      return;
-    }
-  } else if (!framebufferReuseLogged_) {
-    ZO_LOGI("Scheduler: framebuffer resize skipped, reusing existing %ux%u buffer",
-            static_cast<unsigned int>(targetWidth), static_cast<unsigned int>(targetHeight));
-    framebufferReuseLogged_ = true;
-  }
-
   bool timestampCheck = true;
-  if (pendingDiagnosticImageFetch_ &&
-      config_->get().protocolDebug.forceTimestampCheckZeroOnMissingTimestamp) {
-    timestampCheck = false;
-    pendingDiagnosticImageFetch_ = false;
-    ZO_LOGW("Protocol diagnostic fallback: forcing one cycle timestampCheck=0");
-  }
+  try {
+    image::ImageDecoderFacade decoder;
+    const uint16_t targetWidth = config_->get().display.width;
+    const uint16_t targetHeight = config_->get().display.height;
+    ZO_LOGI("Scheduler framebuffer request %ux%u, heap free=%u min=%u largest=%u",
+            static_cast<unsigned int>(targetWidth), static_cast<unsigned int>(targetHeight),
+            static_cast<unsigned int>(ESP.getFreeHeap()),
+            static_cast<unsigned int>(ESP.getMinFreeHeap()),
+            static_cast<unsigned int>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
 
-  lastProtocolResponse_ = protocol_->performSync(
-      timestampCheck, config_->apiKey(), config_->lastTimestamp(), wifi_->apRetries(),
-      [&](image::IByteStream& stream, protocol::ProtocolResponse& rsp) {
-        rsp.decode = decoder.decode(stream, framebuffer_, kProbeLimit);
-        ZO_LOGI("Decode selected format=%d result=%d pixels=%u", static_cast<int>(rsp.decode.format),
-                static_cast<int>(rsp.decode.status), static_cast<unsigned int>(rsp.decode.pixelsDecoded));
-
-        if (!rsp.decode.success) {
-          return false;
-        }
-
-        if (display_ == nullptr) {
-          rsp.renderMessage = "Display unavailable";
-          return false;
-        }
-
-        const bool renderOk =
-            display_->renderIndexed(framebuffer_, rsp.headers.rotate, rsp.headers.partialRefresh);
-        rsp.renderSuccess = renderOk;
-        rsp.renderMessage = renderOk ? "Render OK" : "Render failed";
-
-        if (renderOk && webUI_ != nullptr) {
-          webUI_->updatePreview(framebuffer_);
-        }
-
-        return renderOk;
-      });
-
-  if (config_->get().protocolDebug.forceTimestampCheckZeroOnMissingTimestamp &&
-      lastProtocolResponse_.missingRequiredTimestamp && timestampCheck) {
-    pendingDiagnosticImageFetch_ = true;
-  }
-
-  if (lastProtocolResponse_.resultClass == protocol::ProtocolResultClass::SuccessChanged) {
-    if (!lastProtocolResponse_.bodyPresent) {
-      ZO_LOGW("Timestamp not committed: body missing");
-      lastRenderResult_ = "No body";
-      lastProtocolResponse_.resultClass = protocol::ProtocolResultClass::ProtocolBodyMissing;
-    } else if (!lastProtocolResponse_.decode.success || !lastProtocolResponse_.renderSuccess) {
-      ZO_LOGW("Timestamp not committed: decode/render failed");
-      lastRenderResult_ = lastProtocolResponse_.renderMessage;
-      if (lastRenderResult_.isEmpty()) {
-        lastRenderResult_ = lastProtocolResponse_.decode.errorMessage;
+    if (framebuffer_.width() != targetWidth || framebuffer_.height() != targetHeight) {
+      framebufferReuseLogged_ = false;
+      if (!framebuffer_.resize(targetWidth, targetHeight)) {
+        ZO_LOGE("Scheduler: framebuffer resize failed, skipping tick to keep firmware alive");
+        lastRenderResult_ = "Framebuffer alloc failed";
+        state_ = SchedulerState::Idle;
+        return;
       }
-      lastProtocolResponse_.resultClass = protocol::ProtocolResultClass::ProtocolDecodeRenderFailure;
-    } else {
-      config_->setLastTimestamp(lastProtocolResponse_.candidateTimestamp);
-      config_->save();
-      ZO_LOGI("Timestamp committed: %s", lastProtocolResponse_.candidateTimestamp.c_str());
-      lastRenderResult_ = "Render OK + TS commit";
+    } else if (!framebufferReuseLogged_) {
+      ZO_LOGI("Scheduler: framebuffer resize skipped, reusing existing %ux%u buffer",
+              static_cast<unsigned int>(targetWidth), static_cast<unsigned int>(targetHeight));
+      framebufferReuseLogged_ = true;
     }
-  } else if (lastProtocolResponse_.resultClass == protocol::ProtocolResultClass::SuccessUnchanged) {
-    if (lastProtocolResponse_.bodyPresent) {
-      if (!lastProtocolResponse_.decode.success || !lastProtocolResponse_.renderSuccess) {
-        ZO_LOGW("Unchanged response body decode/render failed");
+
+    if (pendingDiagnosticImageFetch_ &&
+        config_->get().protocolDebug.forceTimestampCheckZeroOnMissingTimestamp) {
+      timestampCheck = false;
+      pendingDiagnosticImageFetch_ = false;
+      ZO_LOGW("Protocol diagnostic fallback: forcing one cycle timestampCheck=0");
+    }
+
+    lastProtocolResponse_ = protocol_->performSync(
+        timestampCheck, config_->apiKey(), config_->lastTimestamp(), wifi_->apRetries(),
+        [&](image::IByteStream& stream, protocol::ProtocolResponse& rsp) {
+          rsp.decode = decoder.decode(stream, framebuffer_, kProbeLimit);
+          ZO_LOGI("Decode selected format=%d result=%d pixels=%u", static_cast<int>(rsp.decode.format),
+                  static_cast<int>(rsp.decode.status), static_cast<unsigned int>(rsp.decode.pixelsDecoded));
+
+          if (!rsp.decode.success) {
+            return false;
+          }
+
+          if (display_ == nullptr) {
+            rsp.renderMessage = "Display unavailable";
+            return false;
+          }
+
+          const bool renderOk =
+              display_->renderIndexed(framebuffer_, rsp.headers.rotate, rsp.headers.partialRefresh);
+          rsp.renderSuccess = renderOk;
+          rsp.renderMessage = renderOk ? "Render OK" : "Render failed";
+
+          if (renderOk && webUI_ != nullptr) {
+            webUI_->updatePreview(framebuffer_);
+          }
+
+          return renderOk;
+        });
+  } catch (const std::bad_alloc&) {
+    ZO_LOGE("Scheduler: caught std::bad_alloc in sync path, heap free=%u min=%u largest=%u",
+            static_cast<unsigned int>(ESP.getFreeHeap()),
+            static_cast<unsigned int>(ESP.getMinFreeHeap()),
+            static_cast<unsigned int>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+    lastRenderResult_ = "OOM (caught)";
+    state_ = SchedulerState::Idle;
+    return;
+  } catch (...) {
+    ZO_LOGE("Scheduler: caught unknown C++ exception in sync path");
+    lastRenderResult_ = "Exception (caught)";
+    state_ = SchedulerState::Idle;
+    return;
+  }
+
+  try {
+    if (config_->get().protocolDebug.forceTimestampCheckZeroOnMissingTimestamp &&
+        lastProtocolResponse_.missingRequiredTimestamp && timestampCheck) {
+      pendingDiagnosticImageFetch_ = true;
+    }
+
+    if (lastProtocolResponse_.resultClass == protocol::ProtocolResultClass::SuccessChanged) {
+      if (!lastProtocolResponse_.bodyPresent) {
+        ZO_LOGW("Timestamp not committed: body missing");
+        lastRenderResult_ = "No body";
+        lastProtocolResponse_.resultClass = protocol::ProtocolResultClass::ProtocolBodyMissing;
+      } else if (!lastProtocolResponse_.decode.success || !lastProtocolResponse_.renderSuccess) {
+        ZO_LOGW("Timestamp not committed: decode/render failed");
         lastRenderResult_ = lastProtocolResponse_.renderMessage;
         if (lastRenderResult_.isEmpty()) {
           lastRenderResult_ = lastProtocolResponse_.decode.errorMessage;
         }
-        lastProtocolResponse_.resultClass =
-            protocol::ProtocolResultClass::ProtocolDecodeRenderFailure;
+        lastProtocolResponse_.resultClass = protocol::ProtocolResultClass::ProtocolDecodeRenderFailure;
       } else {
-        ZO_LOGI("Timestamp unchanged, body rendered: %s",
-                lastProtocolResponse_.candidateTimestamp.c_str());
-        lastRenderResult_ = "Render OK (unchanged)";
+        config_->setLastTimestamp(lastProtocolResponse_.candidateTimestamp);
+        // Do not persist timestamp to NVS on every update. Runtime boot flow
+        // intentionally starts with a fresh fetch, and avoiding NVS writes keeps
+        // post-render path lightweight and less allocation-prone.
+        ZO_LOGI("Timestamp committed (RAM): %s", lastProtocolResponse_.candidateTimestamp.c_str());
+        lastRenderResult_ = "Render OK + TS commit";
       }
-    } else {
-      ZO_LOGI("Timestamp unchanged: %s", lastProtocolResponse_.candidateTimestamp.c_str());
-      lastRenderResult_ = "Skipped (unchanged)";
+    } else if (lastProtocolResponse_.resultClass == protocol::ProtocolResultClass::SuccessUnchanged) {
+      if (lastProtocolResponse_.bodyPresent) {
+        if (!lastProtocolResponse_.decode.success || !lastProtocolResponse_.renderSuccess) {
+          ZO_LOGW("Unchanged response body decode/render failed");
+          lastRenderResult_ = lastProtocolResponse_.renderMessage;
+          if (lastRenderResult_.isEmpty()) {
+            lastRenderResult_ = lastProtocolResponse_.decode.errorMessage;
+          }
+          lastProtocolResponse_.resultClass =
+              protocol::ProtocolResultClass::ProtocolDecodeRenderFailure;
+        } else {
+          ZO_LOGI("Timestamp unchanged, body rendered: %s",
+                  lastProtocolResponse_.candidateTimestamp.c_str());
+          lastRenderResult_ = "Render OK (unchanged)";
+        }
+      } else {
+        ZO_LOGI("Timestamp unchanged: %s", lastProtocolResponse_.candidateTimestamp.c_str());
+        lastRenderResult_ = "Skipped (unchanged)";
+      }
+    } else if (lastProtocolResponse_.missingRequiredTimestamp) {
+      lastRenderResult_ = "Missing Timestamp";
     }
-  } else if (lastProtocolResponse_.missingRequiredTimestamp) {
-    lastRenderResult_ = "Missing Timestamp";
+  } catch (const std::bad_alloc&) {
+    ZO_LOGE("Scheduler: caught std::bad_alloc in post-sync path, heap free=%u min=%u largest=%u",
+            static_cast<unsigned int>(ESP.getFreeHeap()),
+            static_cast<unsigned int>(ESP.getMinFreeHeap()),
+            static_cast<unsigned int>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+    lastRenderResult_ = "OOM post-sync";
+    state_ = SchedulerState::Idle;
+    return;
+  } catch (...) {
+    ZO_LOGE("Scheduler: caught unknown C++ exception in post-sync path");
+    lastRenderResult_ = "Exception post-sync";
+    state_ = SchedulerState::Idle;
+    return;
   }
 
   state_ = SchedulerState::Idle;

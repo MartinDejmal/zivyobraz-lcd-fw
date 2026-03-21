@@ -131,7 +131,7 @@ void ConfigManager::loadDefaults() {
   cfg_.display.pins = {
       .mosi = 7,
       .sclk = 6,
-      .cs = 10,
+      .cs = 3,
       .dc = -1,  // DISP pin (SpiPins.dc reused): HIGH=display on, -1=always on
       .rst = -1,
       .bl = -1,  // no backlight (reflective display)
