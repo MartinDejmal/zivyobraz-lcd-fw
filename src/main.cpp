@@ -12,6 +12,8 @@
 
 #if defined(ZO_DISPLAY_SHARP_MIP)
 #include "display/sharp_mip_display.h"
+#elif defined(ZO_DISPLAY_ILI9488)
+#include "display/ili9488_display.h"
 #else
 #include "display/st7789_display.h"
 #endif
@@ -21,6 +23,8 @@ namespace {
 zivyobraz::config::ConfigManager* gConfig = nullptr;
 #if defined(ZO_DISPLAY_SHARP_MIP)
 zivyobraz::display::SharpMipDisplay* gDisplay = nullptr;
+#elif defined(ZO_DISPLAY_ILI9488)
+zivyobraz::display::Ili9488Display* gDisplay = nullptr;
 #else
 zivyobraz::display::St7789Display* gDisplay = nullptr;
 #endif
@@ -40,6 +44,8 @@ void setup() {
     gDisplay = new (std::nothrow)
 #if defined(ZO_DISPLAY_SHARP_MIP)
         zivyobraz::display::SharpMipDisplay();
+#elif defined(ZO_DISPLAY_ILI9488)
+        zivyobraz::display::Ili9488Display();
 #else
         zivyobraz::display::St7789Display();
 #endif

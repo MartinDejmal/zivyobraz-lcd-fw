@@ -19,6 +19,7 @@ namespace zivyobraz {
 enum class DisplayType : uint8_t {
   St7789,
   SharpMip,
+  Ili9488,
   Unknown,
 };
 

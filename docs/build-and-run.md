@@ -3,12 +3,12 @@
 ## Požadavky
 
 - PlatformIO (CLI nebo VS Code extension)
-- ESP32 deska kompatibilní s `board = esp32dev` nebo `board = esp32-c3-devkitm-1`
+- ESP32 deska kompatibilní s `board = esp32dev` nebo `board = esp32-c3-devkitm-1` nebo `board = esp32-s3-devkitm-1`
 - ST7789 připojený dle pinů z výchozí konfigurace nebo vlastního nastavení
 
 ## PlatformIO konfigurace
 
-`platformio.ini` obsahuje dva environments:
+`platformio.ini` obsahuje tři environments:
 
 ### `[env:esp32dev]` — ST7789 TFT (výchozí)
 - Deska: `esp32dev`
@@ -24,6 +24,14 @@
 - Výchozí SPI2 piny: MOSI=GPIO7, SCLK=GPIO6, CS=GPIO10
 - Volitelný pin DISP (zapnutí displeje): nastav v `loadDefaults()`, výchozí -1 (vždy zapnuto)
 
+### `[env:LaskaKit-ESPD-35]` — ILI9488 TFT 480×320 65K barev na ESP32-S3 (LaskaKit ESPD-3.5)
+- Deska: `esp32-s3-devkitm-1`
+- Framework: Arduino
+- Knihovna: `bodmer/TFT_eSPI`
+- C++17
+- Piny (hardware v3): MOSI=GPIO11, SCLK=GPIO12, CS=GPIO48, DC=GPIO47, RST=-1 (připojen na EN), BL=GPIO45
+- Rozlišení: 480×320 px, 65K barev
+
 ## Typický workflow
 
 ```bash
@@ -34,6 +42,10 @@ platformio run -e esp32dev -t upload
 # Sharp LS027B7DH01 build
 platformio run -e esp32c3-sharp-ls027b7dh01
 platformio run -e esp32c3-sharp-ls027b7dh01 -t upload
+
+# LaskaKit ESPD-3.5 (ILI9488) build
+platformio run -e LaskaKit-ESPD-35
+platformio run -e LaskaKit-ESPD-35 -t upload
 
 platformio device monitor -b 115200
 ```
