@@ -136,6 +136,20 @@ void ConfigManager::loadDefaults() {
       .rst = -1,
       .bl = -1,  // no backlight (reflective display)
   };
+#elif defined(ZO_DISPLAY_ILI9488)
+  cfg_.boardName = "LaskaKit-ESPD-35";
+  cfg_.display.type = DisplayType::Ili9488;
+  cfg_.display.width = 480;
+  cfg_.display.height = 320;
+  cfg_.display.rotation = 1;
+  cfg_.display.pins = {
+      .mosi = 11,
+      .sclk = 12,
+      .cs = 48,
+      .dc = 47,
+      .rst = -1,  // RST connected to EN pin
+      .bl = 45,
+  };
 #else
   cfg_.boardName = "esp32dev";
   cfg_.display.type = DisplayType::St7789;
